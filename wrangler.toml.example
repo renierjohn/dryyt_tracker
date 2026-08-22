@@ -1,0 +1,50 @@
+# Reference template only — NOT read by wrangler.
+#
+# The live config for this project is wrangler.jsonc (Cloudflare's newer,
+# preferred format; wrangler reads that file, not this one). This file exists
+# purely as a plain-text reference showing the config shape with placeholder
+# values, e.g. for onboarding someone setting up their own Cloudflare
+# account/database. See README.md's "Installation" section for how to use it.
+
+name = "dryyt-tracker"
+main = "worker/index.ts"
+compatibility_date = "2026-08-21"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "<YOUR_D1_DATABASE_NAME>"
+database_id = "<YOUR_D1_DATABASE_ID>"
+migrations_dir = "./migrations"
+
+[vars]
+# "true" enables the forgot-password dev-mode stand-in (no email service yet):
+# the reset link is returned directly in the API response instead of emailed.
+# Keep this "false" here — it's the default read by a bare `wrangler deploy`.
+# For local convenience, set DEV_MODE=true in a gitignored .dev.vars file
+# instead (see .dev.vars.example) rather than flipping this default.
+DEV_MODE = "false"
+
+[assets]
+directory = "./dist"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+# Explicit production override — redundant with the top-level default above,
+# but kept explicit so a future change to the top-level default can't
+# accidentally re-enable DEV_MODE in production. `yarn deploy` targets this
+# environment explicitly (`wrangler deploy --env production`).
+#
+# d1_databases is NOT inherited from the top level by wrangler environments —
+# it must be repeated here, or the production Worker deploys with no DB
+# binding at all (confirmed via `wrangler deploy --dry-run --env production`).
+[env.production]
+name = "dryyt-tracker"
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "<YOUR_D1_DATABASE_NAME>"
+database_id = "<YOUR_D1_DATABASE_ID>"
+migrations_dir = "./migrations"
+
+[env.production.vars]
+DEV_MODE = "false"

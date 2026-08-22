@@ -1117,20 +1117,14 @@ Expected: FAIL — these routes don't exist yet (404).
 
 - [ ] **Step 3: Add login/logout/me to `worker/routes/auth.ts`**
 
-Append to the file (after the `register` handler, before nothing else — this is the whole file's new content added at the end):
-
-```ts
-import { getUserByEmail as _unused } from '../db'; // already imported above; keep single import line
-```
-
-Instead, update the existing top import line and add the new handlers. The full updated import line and new handlers:
+Add two new imports alongside the existing ones at the top of the file (do not duplicate the existing `hashPassword`/`countUsers`/etc. imports — just add these):
 
 ```ts
 import { verifyPassword } from '../crypto';
 import { requireAuth, clearSession } from '../middleware/auth';
 ```
 
-(add these two imports alongside the existing ones from Task 5), then append:
+Then append the following handlers after the `register` handler:
 
 ```ts
 authRoutes.post('/login', async (c) => {
