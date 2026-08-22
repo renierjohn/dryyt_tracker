@@ -6,6 +6,7 @@ import {
   createPasswordReset, getPasswordReset, deletePasswordReset, updatePasswordHash,
   updateUserProfile, setUserAvatarKey,
   createAlert, getAlertById, getAlertsForUser, getPublicAlertsForUser, updateAlert, deleteAlert,
+  listUsersWithRoles, updateUserAdminFields, setUserActive,
 } from '../worker/db';
 
 describe('users', () => {
@@ -211,5 +212,35 @@ describe('alerts CRUD', () => {
     const alert = await createAlert(env.DB, { userId: user.id, createdBy: user.id, type: 'info', visibility: 'public', bodyHtml: '<p>x</p>' });
     await deleteAlert(env.DB, alert.id);
     expect(await getAlertById(env.DB, alert.id)).toBeNull();
+  });
+});
+
+describe('admin user management', () => {
+  it('lists users with their role name', async () => {
+    const user = await createUser(env.DB, {
+      email: 'listme@example.com', passwordHash: 'h', passwordSalt: 's', roleId: 2, displayName: 'List Me',
+    });
+    const list = await listUsersWithRoles(env.DB);
+    const found = list.find((u) => u.id === user.id);
+    expect(found?.role_name).toBe('user');
+  });
+
+  it('updates admin-editable fields including role_id', async () => {
+    const user = await createUser(env.DB, {
+      email: 'editme@example.com', passwordHash: 'h', passwordSalt: 's', roleId: 2, displayName: 'Edit Me',
+    });
+    const updated = await updateUserAdminFields(env.DB, user.id, { displayName: 'Edited', roleId: 1 });
+    expect(updated.display_name).toBe('Edited');
+    expect(updated.role_id).toBe(1);
+  });
+
+  it('sets is_active on and off', async () => {
+    const user = await createUser(env.DB, {
+      email: 'deactivateme@example.com', passwordHash: 'h', passwordSalt: 's', roleId: 2, displayName: 'Deactivate Me',
+    });
+    await setUserActive(env.DB, user.id, false);
+    expect((await getUserById(env.DB, user.id))?.is_active).toBe(0);
+    await setUserActive(env.DB, user.id, true);
+    expect((await getUserById(env.DB, user.id))?.is_active).toBe(1);
   });
 });

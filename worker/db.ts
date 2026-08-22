@@ -6,6 +6,7 @@ export interface DbUser {
   role_id: number;
   display_name: string;
   avatar_key: string | null;
+  is_active: number;
   created_at: string;
 }
 
@@ -277,4 +278,40 @@ export async function updateAlert(
 
 export async function deleteAlert(db: D1Database, id: number): Promise<void> {
   await db.prepare('DELETE FROM alerts WHERE id = ?').bind(id).run();
+}
+
+export async function listUsersWithRoles(db: D1Database): Promise<(DbUser & { role_name: string })[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT u.*, r.name as role_name
+       FROM users u
+       JOIN roles r ON r.id = u.role_id
+       ORDER BY u.id ASC`,
+    )
+    .all<DbUser & { role_name: string }>();
+  return results;
+}
+
+export async function updateUserAdminFields(
+  db: D1Database,
+  userId: number,
+  params: { displayName?: string; email?: string; roleId?: number },
+): Promise<DbUser> {
+  const result = await db
+    .prepare(
+      `UPDATE users SET
+         display_name = COALESCE(?, display_name),
+         email = COALESCE(?, email),
+         role_id = COALESCE(?, role_id)
+       WHERE id = ?
+       RETURNING *`,
+    )
+    .bind(params.displayName ?? null, params.email ?? null, params.roleId ?? null, userId)
+    .first<DbUser>();
+  if (!result) throw new Error('user not found');
+  return result;
+}
+
+export async function setUserActive(db: D1Database, userId: number, isActive: boolean): Promise<void> {
+  await db.prepare('UPDATE users SET is_active = ? WHERE id = ?').bind(isActive ? 1 : 0, userId).run();
 }
