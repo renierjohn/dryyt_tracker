@@ -95,3 +95,29 @@ describe('password resets', () => {
     expect(await getPasswordReset(env.DB, 'reset-1')).toBeNull();
   });
 });
+
+describe('is_active column and alerts table (migration 0002)', () => {
+  it('defaults is_active to 1 for a new user', async () => {
+    const user = await createUser(env.DB, {
+      email: 'active-check@example.com', passwordHash: 'h', passwordSalt: 's', roleId: 2, displayName: 'Active Check',
+    });
+    const row = await env.DB.prepare('SELECT is_active FROM users WHERE id = ?').bind(user.id).first<{ is_active: number }>();
+    expect(row?.is_active).toBe(1);
+  });
+
+  it('has a queryable alerts table with the expected columns', async () => {
+    const user = await createUser(env.DB, {
+      email: 'alert-owner@example.com', passwordHash: 'h', passwordSalt: 's', roleId: 2, displayName: 'Alert Owner',
+    });
+    const inserted = await env.DB.prepare(
+      `INSERT INTO alerts (user_id, created_by, type, visibility, body_html) VALUES (?, ?, 'info', 'public', '<p>hi</p>') RETURNING *`,
+    ).bind(user.id, user.id).first<Record<string, unknown>>();
+    expect(inserted?.type).toBe('info');
+    expect(inserted?.visibility).toBe('public');
+  });
+
+  it('seeded an admin role with manage_users permission', async () => {
+    const role = await env.DB.prepare("SELECT * FROM roles WHERE name = 'admin'").first<{ permissions: string }>();
+    expect(JSON.parse(role!.permissions)).toEqual(['manage_users']);
+  });
+});

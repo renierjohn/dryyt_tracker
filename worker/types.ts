@@ -1,5 +1,6 @@
 export interface Env {
   DB: D1Database;
+  AVATARS: R2Bucket;
   DEV_MODE?: 'true' | 'false';
 }
 

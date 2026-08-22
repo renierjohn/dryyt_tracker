@@ -16,6 +16,10 @@ database_name = "<YOUR_D1_DATABASE_NAME>"
 database_id = "<YOUR_D1_DATABASE_ID>"
 migrations_dir = "./migrations"
 
+[[r2_buckets]]
+binding = "AVATARS"
+bucket_name = "<YOUR_R2_BUCKET_NAME>"
+
 [vars]
 # "true" enables the forgot-password dev-mode stand-in (no email service yet):
 # the reset link is returned directly in the API response instead of emailed.
@@ -34,9 +38,10 @@ run_worker_first = ["/api/*"]
 # accidentally re-enable DEV_MODE in production. `yarn deploy` targets this
 # environment explicitly (`wrangler deploy --env production`).
 #
-# d1_databases is NOT inherited from the top level by wrangler environments —
-# it must be repeated here, or the production Worker deploys with no DB
-# binding at all (confirmed via `wrangler deploy --dry-run --env production`).
+# d1_databases and r2_buckets are NOT inherited from the top level by
+# wrangler environments — they must be repeated here, or the production
+# Worker deploys with no DB/R2 binding at all (confirmed via
+# `wrangler deploy --dry-run --env production`).
 [env.production]
 name = "dryyt-tracker"
 
@@ -45,6 +50,10 @@ binding = "DB"
 database_name = "<YOUR_D1_DATABASE_NAME>"
 database_id = "<YOUR_D1_DATABASE_ID>"
 migrations_dir = "./migrations"
+
+[[env.production.r2_buckets]]
+binding = "AVATARS"
+bucket_name = "<YOUR_R2_BUCKET_NAME>"
 
 [env.production.vars]
 DEV_MODE = "false"

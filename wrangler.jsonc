@@ -11,6 +11,9 @@
       "migrations_dir": "./migrations"
     }
   ],
+  "r2_buckets": [
+    { "binding": "AVATARS", "bucket_name": "dryyt-tracker-avatars" }
+  ],
   "vars": {
     "DEV_MODE": "false"
   },
@@ -29,6 +32,9 @@
           "database_id": "f6aae4ea-9b19-42fd-b141-d90c0dfbd1fd",
           "migrations_dir": "./migrations"
         }
+      ],
+      "r2_buckets": [
+        { "binding": "AVATARS", "bucket_name": "dryyt-tracker-avatars" }
       ],
       "vars": {
         "DEV_MODE": "false"
