@@ -14,14 +14,14 @@ describe('POST /api/auth/forgot-password', () => {
     await post('/api/auth/register', { email: 'forgot@example.com', password: 'password123', display_name: 'F' });
     const res = await post('/api/auth/forgot-password', { email: 'forgot@example.com' });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = await res.json() as { ok: boolean; resetLink?: string };
     expect(body.resetLink).toMatch(/reset-password\?token=/);
   });
 
   it('returns 200 without a resetLink for an unknown email (no enumeration)', async () => {
     const res = await post('/api/auth/forgot-password', { email: 'unknown@example.com' });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = await res.json() as { ok: boolean; resetLink?: string };
     expect(body.resetLink).toBeUndefined();
   });
 });
@@ -32,7 +32,7 @@ describe('POST /api/auth/reset-password', () => {
     const oldCookie = registerRes.headers.get('set-cookie')!.split(';')[0];
 
     const forgotRes = await post('/api/auth/forgot-password', { email: 'reset@example.com' });
-    const { resetLink } = await forgotRes.json();
+    const { resetLink } = await forgotRes.json() as { resetLink: string };
     const token = new URL(resetLink).searchParams.get('token');
 
     const resetRes = await post('/api/auth/reset-password', { token, password: 'new-password123' });
@@ -61,11 +61,29 @@ describe('POST /api/auth/reset-password', () => {
     expect(res.status).toBe(400);
   });
 
+  it('invalidates other outstanding reset tokens for the same user after a successful reset', async () => {
+    await post('/api/auth/register', { email: 'multi-token@example.com', password: 'password123', display_name: 'Multi' });
+
+    const firstForgot = await post('/api/auth/forgot-password', { email: 'multi-token@example.com' });
+    const firstBody = await firstForgot.json() as { resetLink: string };
+    const firstToken = new URL(firstBody.resetLink).searchParams.get('token');
+
+    const secondForgot = await post('/api/auth/forgot-password', { email: 'multi-token@example.com' });
+    const secondBody = await secondForgot.json() as { resetLink: string };
+    const secondToken = new URL(secondBody.resetLink).searchParams.get('token');
+
+    const resetRes = await post('/api/auth/reset-password', { token: firstToken, password: 'first-token-password' });
+    expect(resetRes.status).toBe(200);
+
+    const secondResetRes = await post('/api/auth/reset-password', { token: secondToken, password: 'second-token-password' });
+    expect(secondResetRes.status).toBe(400);
+  });
+
   it('rejects reusing a token a second time with 400', async () => {
     const registerRes = await post('/api/auth/register', { email: 'reuse@example.com', password: 'password123', display_name: 'Reuse' });
     void registerRes;
     const forgotRes = await post('/api/auth/forgot-password', { email: 'reuse@example.com' });
-    const { resetLink } = await forgotRes.json();
+    const { resetLink } = await forgotRes.json() as { resetLink: string };
     const token = new URL(resetLink).searchParams.get('token');
 
     const first = await post('/api/auth/reset-password', { token, password: 'first-new-password' });

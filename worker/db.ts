@@ -28,11 +28,13 @@ export interface DbPasswordReset {
   expires_at: string;
 }
 
+// Not used by registration (would reconstruct a count-then-insert race) — see createUserWithBootstrapRole.
 export async function countUsers(db: D1Database): Promise<number> {
   const row = await db.prepare('SELECT COUNT(*) as count FROM users').first<{ count: number }>();
   return row?.count ?? 0;
 }
 
+// Not used by registration (would reconstruct a count-then-insert race) — see createUserWithBootstrapRole.
 export async function createUser(
   db: D1Database,
   params: { email: string; passwordHash: string; passwordSalt: string; roleId: number; displayName: string },
@@ -138,6 +140,10 @@ export async function deleteSessionsForUser(db: D1Database, userId: number): Pro
   await db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId).run();
 }
 
+export async function deleteAllPasswordResetsForUser(db: D1Database, userId: number): Promise<void> {
+  await db.prepare('DELETE FROM password_resets WHERE user_id = ?').bind(userId).run();
+}
+
 export async function createPasswordReset(
   db: D1Database,
   token: string,
@@ -157,6 +163,16 @@ export async function getPasswordReset(db: D1Database, token: string): Promise<D
 
 export async function deletePasswordReset(db: D1Database, token: string): Promise<void> {
   await db.prepare('DELETE FROM password_resets WHERE token = ?').bind(token).run();
+}
+
+// Atomically deletes and returns the token row in one statement, so two concurrent
+// requests for the same token can't both observe it as valid (only one gets the row back).
+export async function consumePasswordReset(db: D1Database, token: string): Promise<DbPasswordReset | null> {
+  const row = await db
+    .prepare('DELETE FROM password_resets WHERE token = ? RETURNING *')
+    .bind(token)
+    .first<DbPasswordReset>();
+  return row ?? null;
 }
 
 export async function updatePasswordHash(

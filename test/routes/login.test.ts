@@ -23,6 +23,17 @@ describe('POST /api/auth/login', () => {
     expect(res.headers.get('set-cookie')).toMatch(/session=/);
   });
 
+  it('sets a session cookie with HttpOnly and SameSite=Lax', async () => {
+    await post('/api/auth/register', { email: 'cookieflags@example.com', password: 'password123', display_name: 'CF' });
+    const res = await post('/api/auth/login', { email: 'cookieflags@example.com', password: 'password123' });
+    const setCookie = res.headers.get('set-cookie');
+    // Secure is intentionally not asserted here: this test runs against https://example.com
+    // (SELF.fetch's default host), and the Secure flag is protocol/hostname-derived, not
+    // deterministic in this harness the way HttpOnly/SameSite are. See middleware/auth.ts.
+    expect(setCookie).toMatch(/HttpOnly/);
+    expect(setCookie).toMatch(/SameSite=Lax/i);
+  });
+
   it('rejects a wrong password with 401', async () => {
     await post('/api/auth/register', { email: 'login2@example.com', password: 'password123', display_name: 'L2' });
     const res = await post('/api/auth/login', { email: 'login2@example.com', password: 'wrong-password' });
@@ -46,7 +57,7 @@ describe('GET /api/auth/me', () => {
     const cookie = extractCookie(registerRes);
     const res = await SELF.fetch('https://example.com/api/auth/me', { headers: { Cookie: cookie } });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = await res.json() as { user: { email: string } };
     expect(body.user.email).toBe('me@example.com');
   });
 });

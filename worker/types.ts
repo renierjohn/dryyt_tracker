@@ -1,5 +1,6 @@
 export interface Env {
   DB: D1Database;
+  DEV_MODE?: 'true' | 'false';
 }
 
 export interface AuthUser {

@@ -2,8 +2,8 @@ import { Hono } from 'hono';
 import { hashPassword, verifyPassword, generateToken } from '../crypto';
 import {
   createUserWithBootstrapRole, getUserByEmail, getRoleById,
-  createPasswordReset, getPasswordReset, deletePasswordReset,
-  updatePasswordHash, deleteSessionsForUser,
+  createPasswordReset, consumePasswordReset,
+  updatePasswordHash, deleteSessionsForUser, deleteAllPasswordResetsForUser,
 } from '../db';
 import { createAndSetSession, requireAuth, clearSession } from '../middleware/auth';
 import { isValidEmail, toPublicUser } from '../util';
@@ -26,7 +26,15 @@ authRoutes.post('/register', async (c) => {
   }
 
   const { hash, salt } = await hashPassword(password);
-  const user = await createUserWithBootstrapRole(c.env.DB, { email, passwordHash: hash, passwordSalt: salt, displayName });
+  let user;
+  try {
+    user = await createUserWithBootstrapRole(c.env.DB, { email, passwordHash: hash, passwordSalt: salt, displayName });
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('UNIQUE')) {
+      return c.json({ error: 'email_taken' }, 409);
+    }
+    throw err;
+  }
 
   await createAndSetSession(c, user.id);
 
@@ -63,6 +71,7 @@ authRoutes.post('/forgot-password', async (c) => {
   const body = await c.req.json().catch(() => null);
   const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
 
+  const devMode = c.env.DEV_MODE === 'true';
   const user = await getUserByEmail(c.env.DB, email);
   if (!user) return c.json({ ok: true });
 
@@ -73,7 +82,7 @@ authRoutes.post('/forgot-password', async (c) => {
   const url = new URL(c.req.url);
   const resetLink = `${url.origin}/reset-password?token=${token}`;
   console.log(`Password reset link for ${email}: ${resetLink}`);
-  return c.json({ ok: true, resetLink });
+  return c.json(devMode ? { ok: true, resetLink } : { ok: true });
 });
 
 authRoutes.post('/reset-password', async (c) => {
@@ -83,15 +92,18 @@ authRoutes.post('/reset-password', async (c) => {
 
   if (password.length < 8) return c.json({ error: 'weak_password' }, 400);
 
-  const reset = await getPasswordReset(c.env.DB, token);
+  // Consume the token atomically (DELETE ... RETURNING) so a concurrent replay of the
+  // same token can't both observe it as valid — only the request that deletes the row
+  // gets it back. An expired token is still consumed here; that's fine, it's still rejected.
+  const reset = await consumePasswordReset(c.env.DB, token);
   if (!reset || new Date(reset.expires_at) < new Date()) {
     return c.json({ error: 'invalid_or_expired_token' }, 400);
   }
 
   const { hash, salt } = await hashPassword(password);
   await updatePasswordHash(c.env.DB, reset.user_id, hash, salt);
-  await deletePasswordReset(c.env.DB, token);
   await deleteSessionsForUser(c.env.DB, reset.user_id);
+  await deleteAllPasswordResetsForUser(c.env.DB, reset.user_id);
 
   return c.json({ ok: true });
 });

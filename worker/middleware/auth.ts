@@ -12,7 +12,11 @@ export async function createAndSetSession(c: Context<AppBindings>, userId: numbe
   const token = generateToken();
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
   await createSession(c.env.DB, token, userId, expiresAt);
-  const secure = new URL(c.req.url).protocol === 'https:';
+  // Derive from hostname, not protocol: a misconfigured proxy or a workers.dev host
+  // without "Always Use HTTPS" would otherwise see `http:` in production and issue a
+  // non-Secure cookie. Only actual local dev gets a non-Secure cookie.
+  const hostname = new URL(c.req.url).hostname;
+  const secure = hostname !== 'localhost' && hostname !== '127.0.0.1';
   setCookie(c, SESSION_COOKIE, token, {
     httpOnly: true,
     secure,
