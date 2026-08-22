@@ -1,0 +1,9 @@
+# Copy this file to .dev.vars (gitignored) for local `wrangler dev` runs.
+# .dev.vars is merged into wrangler.jsonc's `vars` automatically by wrangler
+# for local development only — it is never used for a real deploy.
+
+# Enables the forgot-password dev-mode stand-in (no email service yet): the
+# reset link is returned directly in the API response instead of emailed.
+# wrangler.jsonc's committed default is "false" (production-safe); set it to
+# "true" here so you can see reset links while developing locally.
+DEV_MODE=true

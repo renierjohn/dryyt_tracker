@@ -15,6 +15,9 @@ dist-ssr
 # Wrangler local state (D1 sqlite, etc.)
 .wrangler
 
+# Local-only env overrides (see .dev.vars.example)
+.dev.vars
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

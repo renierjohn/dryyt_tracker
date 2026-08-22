@@ -10,7 +10,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "deploy": "yarn build && wrangler deploy"
+    "deploy": "yarn build && wrangler deploy --env production"
   },
   "dependencies": {
     "hono": "^4.13.3",

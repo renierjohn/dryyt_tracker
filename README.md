@@ -38,17 +38,30 @@ dependency — no separate global install needed).
    if you'd rather see the whole shape in one place before editing the real
    `wrangler.jsonc`.
 
+   **Update it in both places**: `d1_databases` appears both at the top level
+   and inside `env.production` — wrangler environments do NOT inherit
+   `d1_databases` from the top level (confirmed via
+   `wrangler deploy --dry-run --env production`, which otherwise deploys with
+   no database binding at all), so both copies need your database_id.
+
 5. Apply the schema migration to your new local database:
 
    ```
    npx wrangler d1 migrations apply dryyt-tracker-db --local
    ```
 
-6. Set `DEV_MODE` in `wrangler.jsonc`'s `vars` block: `"true"` for local
-   development (needed so the forgot-password flow shows you the reset link,
-   since there's no email service yet), `"false"` before any real/production
-   deploy — leaving it `"true"` in production would hand a live password-reset
-   token to anyone who knows a user's email address.
+6. `wrangler.jsonc`'s committed `DEV_MODE` default is `"false"` (safe for a
+   real deploy — leaving it `"true"` in production would hand a live
+   password-reset token to anyone who knows a user's email address). For
+   local development, you still want to see the reset link, so copy the
+   local-only override file instead of editing the committed default:
+
+   ```
+   cp .dev.vars.example .dev.vars
+   ```
+
+   `.dev.vars` is gitignored and merged in automatically by `wrangler dev`
+   only — it has no effect on `yarn deploy`.
 
 7. Start the app (see "Running locally" below).
 
@@ -87,7 +100,11 @@ the suite runs.
 yarn deploy
 ```
 
-This builds the frontend and runs `wrangler deploy`.
+This builds the frontend and runs `wrangler deploy --env production`, which
+uses the `env.production` block in `wrangler.jsonc` — explicitly `DEV_MODE:
+"false"`, redundant with the top-level default but kept explicit so the
+production deploy target can never silently inherit a future change to the
+top-level default.
 
 **Before the first real deploy**, the remote D1 database must have migrations
 applied manually — this is a separate, deliberate step and is *not* run by
