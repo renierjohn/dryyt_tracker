@@ -53,6 +53,7 @@ describe('sessions', () => {
     expect(result?.user.role_id).toBe(1);
     expect(result?.user.display_name).toBe('B');
     expect(result?.user.avatar_key).toBeNull();
+    expect(result?.user.is_active).toBe(1);
     expect(result?.user.created_at).toBeTruthy();
 
     // Assert role fields

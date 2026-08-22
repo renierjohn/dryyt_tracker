@@ -102,7 +102,7 @@ export async function getSessionWithUser(
       `SELECT s.token as s_token, s.user_id as s_user_id, s.expires_at as s_expires_at,
               u.id as u_id, u.email as u_email, u.password_hash as u_password_hash,
               u.password_salt as u_password_salt, u.role_id as u_role_id,
-              u.display_name as u_display_name, u.avatar_key as u_avatar_key, u.created_at as u_created_at,
+              u.display_name as u_display_name, u.avatar_key as u_avatar_key, u.is_active as u_is_active, u.created_at as u_created_at,
               r.id as r_id, r.name as r_name, r.permissions as r_permissions, r.created_at as r_created_at
        FROM sessions s
        JOIN users u ON u.id = s.user_id
@@ -122,6 +122,7 @@ export async function getSessionWithUser(
       role_id: row.u_role_id as number,
       display_name: row.u_display_name as string,
       avatar_key: row.u_avatar_key as string | null,
+      is_active: row.u_is_active as number,
       created_at: row.u_created_at as string,
     },
     role: {
