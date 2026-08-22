@@ -11,6 +11,7 @@ export interface AuthUser {
   role_id: number;
   role_name: string;
   permissions: string[];
+  avatar_key: string | null;
 }
 
 export type AppBindings = {

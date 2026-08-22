@@ -186,3 +186,26 @@ export async function updatePasswordHash(
     .bind(passwordHash, passwordSalt, userId)
     .run();
 }
+
+export async function updateUserProfile(
+  db: D1Database,
+  userId: number,
+  params: { displayName?: string; email?: string },
+): Promise<DbUser> {
+  const result = await db
+    .prepare(
+      `UPDATE users SET
+         display_name = COALESCE(?, display_name),
+         email = COALESCE(?, email)
+       WHERE id = ?
+       RETURNING *`,
+    )
+    .bind(params.displayName ?? null, params.email ?? null, userId)
+    .first<DbUser>();
+  if (!result) throw new Error('user not found');
+  return result;
+}
+
+export async function setUserAvatarKey(db: D1Database, userId: number, avatarKey: string | null): Promise<void> {
+  await db.prepare('UPDATE users SET avatar_key = ? WHERE id = ?').bind(avatarKey, userId).run();
+}

@@ -4,6 +4,7 @@ import {
   countUsers, createUser, getUserByEmail, getUserById, getRoleById,
   createSession, getSessionWithUser, deleteSession, deleteSessionsForUser,
   createPasswordReset, getPasswordReset, deletePasswordReset, updatePasswordHash,
+  updateUserProfile, setUserAvatarKey,
 } from '../worker/db';
 
 describe('users', () => {
@@ -119,5 +120,38 @@ describe('is_active column and alerts table (migration 0002)', () => {
   it('seeded an admin role with manage_users permission', async () => {
     const role = await env.DB.prepare("SELECT * FROM roles WHERE name = 'admin'").first<{ permissions: string }>();
     expect(JSON.parse(role!.permissions)).toEqual(['manage_users']);
+  });
+});
+
+describe('updateUserProfile', () => {
+  it('updates display_name and email', async () => {
+    const user = await createUser(env.DB, {
+      email: 'before@example.com', passwordHash: 'h', passwordSalt: 's', roleId: 2, displayName: 'Before',
+    });
+    const updated = await updateUserProfile(env.DB, user.id, { displayName: 'After', email: 'after@example.com' });
+    expect(updated.display_name).toBe('After');
+    expect(updated.email).toBe('after@example.com');
+  });
+
+  it('updates only the provided field', async () => {
+    const user = await createUser(env.DB, {
+      email: 'partial@example.com', passwordHash: 'h', passwordSalt: 's', roleId: 2, displayName: 'Partial',
+    });
+    const updated = await updateUserProfile(env.DB, user.id, { displayName: 'Changed' });
+    expect(updated.display_name).toBe('Changed');
+    expect(updated.email).toBe('partial@example.com');
+  });
+});
+
+describe('setUserAvatarKey', () => {
+  it('sets and clears the avatar key', async () => {
+    const user = await createUser(env.DB, {
+      email: 'avatar@example.com', passwordHash: 'h', passwordSalt: 's', roleId: 2, displayName: 'Avatar',
+    });
+    await setUserAvatarKey(env.DB, user.id, 'avatars/1/photo.jpg');
+    expect((await getUserById(env.DB, user.id))?.avatar_key).toBe('avatars/1/photo.jpg');
+
+    await setUserAvatarKey(env.DB, user.id, null);
+    expect((await getUserById(env.DB, user.id))?.avatar_key).toBeNull();
   });
 });
