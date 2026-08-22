@@ -20,11 +20,14 @@ export function useCurrentUser() {
       const body = await apiFetch<{ user: AuthUser }>('/auth/me');
       setUser(body.user);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        setUser(null);
-      } else {
-        throw err;
+      // Any failure here (401 unauthenticated, or a network blip/unexpected error)
+      // should behave like "not logged in" rather than crash — this call is fired
+      // with `void refresh()` from an effect, so a thrown error becomes an
+      // unhandled promise rejection instead of a catchable error.
+      if (!(err instanceof ApiError && err.status === 401)) {
+        console.error('Failed to load current user', err);
       }
+      setUser(null);
     } finally {
       setLoading(false);
     }

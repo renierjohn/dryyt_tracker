@@ -3,7 +3,11 @@ import { apiFetch } from '../lib/api';
 
 export default function AuthedHome({ user, onLoggedOut }: { user: AuthUser; onLoggedOut: () => Promise<void> }) {
   async function handleLogout() {
-    await apiFetch('/auth/logout', { method: 'POST' });
+    try {
+      await apiFetch('/auth/logout', { method: 'POST' });
+    } catch (err) {
+      console.error('Logout request failed', err);
+    }
     await onLoggedOut();
   }
 
