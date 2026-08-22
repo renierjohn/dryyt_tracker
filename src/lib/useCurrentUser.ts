@@ -31,6 +31,9 @@ export function useCurrentUser() {
   }, []);
 
   useEffect(() => {
+    // Idiomatic fetch-on-mount: refresh() sets loading/user state to reflect the
+    // in-flight/completed session check, not a reactive cascade off other state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh();
   }, [refresh]);
 

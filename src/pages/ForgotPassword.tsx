@@ -1,19 +1,25 @@
 import { type FormEvent, useState } from 'react';
-import { apiFetch } from '../lib/api';
+import { apiFetch, ApiError } from '../lib/api';
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
   const [resetLink, setResetLink] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const body = await apiFetch<{ ok: boolean; resetLink?: string }>('/auth/forgot-password', {
-      method: 'POST',
-      body: JSON.stringify({ email }),
-    });
-    setSubmitted(true);
-    setResetLink(body.resetLink ?? null);
+    setError(null);
+    try {
+      const body = await apiFetch<{ ok: boolean; resetLink?: string }>('/auth/forgot-password', {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      });
+      setSubmitted(true);
+      setResetLink(body.resetLink ?? null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.code : 'unknown_error');
+    }
   }
 
   if (submitted) {
@@ -32,6 +38,7 @@ export default function ForgotPassword() {
   return (
     <form onSubmit={handleSubmit}>
       <h1>Forgot password</h1>
+      {error && <p role="alert">{error}</p>}
       <label>
         Email
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
