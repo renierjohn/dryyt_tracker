@@ -1,0 +1,14 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "dryyt-tracker",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-08-21",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "dryyt-tracker-db",
+      "database_id": "f6aae4ea-9b19-42fd-b141-d90c0dfbd1fd",
+      "migrations_dir": "./migrations"
+    }
+  ]
+}
