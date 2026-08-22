@@ -47,6 +47,22 @@ export async function createUser(
   return result;
 }
 
+export async function createUserWithBootstrapRole(
+  db: D1Database,
+  params: { email: string; passwordHash: string; passwordSalt: string; displayName: string },
+): Promise<DbUser> {
+  const result = await db
+    .prepare(
+      `INSERT INTO users (email, password_hash, password_salt, role_id, display_name)
+       VALUES (?, ?, ?, (SELECT CASE WHEN (SELECT COUNT(*) FROM users) = 0 THEN 1 ELSE 2 END), ?)
+       RETURNING *`,
+    )
+    .bind(params.email, params.passwordHash, params.passwordSalt, params.displayName)
+    .first<DbUser>();
+  if (!result) throw new Error('failed to create user');
+  return result;
+}
+
 export async function getUserByEmail(db: D1Database, email: string): Promise<DbUser | null> {
   const row = await db.prepare('SELECT * FROM users WHERE email = ?').bind(email).first<DbUser>();
   return row ?? null;

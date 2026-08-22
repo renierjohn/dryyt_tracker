@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { hashPassword } from '../crypto';
-import { countUsers, createUser, getUserByEmail, getRoleById } from '../db';
+import { createUserWithBootstrapRole, getUserByEmail, getRoleById } from '../db';
 import { createAndSetSession } from '../middleware/auth';
 import { isValidEmail, toPublicUser } from '../util';
 import type { AppBindings } from '../types';
@@ -21,9 +21,8 @@ authRoutes.post('/register', async (c) => {
     return c.json({ error: 'email_taken' }, 409);
   }
 
-  const roleId = (await countUsers(c.env.DB)) === 0 ? 1 : 2;
   const { hash, salt } = await hashPassword(password);
-  const user = await createUser(c.env.DB, { email, passwordHash: hash, passwordSalt: salt, roleId, displayName });
+  const user = await createUserWithBootstrapRole(c.env.DB, { email, passwordHash: hash, passwordSalt: salt, displayName });
 
   await createAndSetSession(c, user.id);
 
