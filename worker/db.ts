@@ -209,3 +209,72 @@ export async function updateUserProfile(
 export async function setUserAvatarKey(db: D1Database, userId: number, avatarKey: string | null): Promise<void> {
   await db.prepare('UPDATE users SET avatar_key = ? WHERE id = ?').bind(avatarKey, userId).run();
 }
+
+export interface DbAlert {
+  id: number;
+  user_id: number;
+  created_by: number;
+  type: 'info' | 'success' | 'warning' | 'danger';
+  visibility: 'dashboard' | 'public' | 'both';
+  body_html: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function createAlert(
+  db: D1Database,
+  params: { userId: number; createdBy: number; type: DbAlert['type']; visibility: DbAlert['visibility']; bodyHtml: string },
+): Promise<DbAlert> {
+  const result = await db
+    .prepare(
+      `INSERT INTO alerts (user_id, created_by, type, visibility, body_html)
+       VALUES (?, ?, ?, ?, ?) RETURNING *`,
+    )
+    .bind(params.userId, params.createdBy, params.type, params.visibility, params.bodyHtml)
+    .first<DbAlert>();
+  if (!result) throw new Error('failed to create alert');
+  return result;
+}
+
+export async function getAlertById(db: D1Database, id: number): Promise<DbAlert | null> {
+  const row = await db.prepare('SELECT * FROM alerts WHERE id = ?').bind(id).first<DbAlert>();
+  return row ?? null;
+}
+
+export async function getAlertsForUser(db: D1Database, userId: number): Promise<DbAlert[]> {
+  const { results } = await db
+    .prepare('SELECT * FROM alerts WHERE user_id = ? ORDER BY created_at DESC')
+    .bind(userId)
+    .all<DbAlert>();
+  return results;
+}
+
+export async function getPublicAlertsForUser(db: D1Database, userId: number): Promise<DbAlert[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT * FROM alerts WHERE user_id = ? AND visibility IN ('public', 'both') ORDER BY created_at DESC`,
+    )
+    .bind(userId)
+    .all<DbAlert>();
+  return results;
+}
+
+export async function updateAlert(
+  db: D1Database,
+  id: number,
+  params: { type: DbAlert['type']; visibility: DbAlert['visibility']; bodyHtml: string },
+): Promise<DbAlert> {
+  const result = await db
+    .prepare(
+      `UPDATE alerts SET type = ?, visibility = ?, body_html = ?, updated_at = datetime('now')
+       WHERE id = ? RETURNING *`,
+    )
+    .bind(params.type, params.visibility, params.bodyHtml, id)
+    .first<DbAlert>();
+  if (!result) throw new Error('alert not found');
+  return result;
+}
+
+export async function deleteAlert(db: D1Database, id: number): Promise<void> {
+  await db.prepare('DELETE FROM alerts WHERE id = ?').bind(id).run();
+}

@@ -5,6 +5,7 @@ import {
   createSession, getSessionWithUser, deleteSession, deleteSessionsForUser,
   createPasswordReset, getPasswordReset, deletePasswordReset, updatePasswordHash,
   updateUserProfile, setUserAvatarKey,
+  createAlert, getAlertById, getAlertsForUser, getPublicAlertsForUser, updateAlert, deleteAlert,
 } from '../worker/db';
 
 describe('users', () => {
@@ -153,5 +154,62 @@ describe('setUserAvatarKey', () => {
 
     await setUserAvatarKey(env.DB, user.id, null);
     expect((await getUserById(env.DB, user.id))?.avatar_key).toBeNull();
+  });
+});
+
+describe('alerts CRUD', () => {
+  it('creates and lists a user\'s own alerts', async () => {
+    const user = await createUser(env.DB, {
+      email: 'alerts1@example.com', passwordHash: 'h', passwordSalt: 's', roleId: 2, displayName: 'Alerts1',
+    });
+    const alert = await createAlert(env.DB, {
+      userId: user.id, createdBy: user.id, type: 'info', visibility: 'public', bodyHtml: '<p>hi</p>',
+    });
+    expect(alert.type).toBe('info');
+    const list = await getAlertsForUser(env.DB, user.id);
+    expect(list).toHaveLength(1);
+    expect(list[0].id).toBe(alert.id);
+  });
+
+  it('filters public alerts by visibility', async () => {
+    const user = await createUser(env.DB, {
+      email: 'alerts2@example.com', passwordHash: 'h', passwordSalt: 's', roleId: 2, displayName: 'Alerts2',
+    });
+    await createAlert(env.DB, { userId: user.id, createdBy: user.id, type: 'info', visibility: 'dashboard', bodyHtml: '<p>a</p>' });
+    await createAlert(env.DB, { userId: user.id, createdBy: user.id, type: 'warning', visibility: 'public', bodyHtml: '<p>b</p>' });
+    await createAlert(env.DB, { userId: user.id, createdBy: user.id, type: 'danger', visibility: 'both', bodyHtml: '<p>c</p>' });
+
+    const publicAlerts = await getPublicAlertsForUser(env.DB, user.id);
+    expect(publicAlerts).toHaveLength(2);
+    expect(publicAlerts.map((a) => a.visibility).sort()).toEqual(['both', 'public']);
+  });
+
+  it('gets a single alert by id, or null if missing', async () => {
+    const user = await createUser(env.DB, {
+      email: 'alerts3@example.com', passwordHash: 'h', passwordSalt: 's', roleId: 2, displayName: 'Alerts3',
+    });
+    const alert = await createAlert(env.DB, { userId: user.id, createdBy: user.id, type: 'info', visibility: 'public', bodyHtml: '<p>x</p>' });
+    expect((await getAlertById(env.DB, alert.id))?.id).toBe(alert.id);
+    expect(await getAlertById(env.DB, 999999)).toBeNull();
+  });
+
+  it('updates an alert', async () => {
+    const user = await createUser(env.DB, {
+      email: 'alerts4@example.com', passwordHash: 'h', passwordSalt: 's', roleId: 2, displayName: 'Alerts4',
+    });
+    const alert = await createAlert(env.DB, { userId: user.id, createdBy: user.id, type: 'info', visibility: 'public', bodyHtml: '<p>old</p>' });
+    const updated = await updateAlert(env.DB, alert.id, { type: 'danger', visibility: 'dashboard', bodyHtml: '<p>new</p>' });
+    expect(updated.type).toBe('danger');
+    expect(updated.visibility).toBe('dashboard');
+    expect(updated.body_html).toBe('<p>new</p>');
+  });
+
+  it('deletes an alert', async () => {
+    const user = await createUser(env.DB, {
+      email: 'alerts5@example.com', passwordHash: 'h', passwordSalt: 's', roleId: 2, displayName: 'Alerts5',
+    });
+    const alert = await createAlert(env.DB, { userId: user.id, createdBy: user.id, type: 'info', visibility: 'public', bodyHtml: '<p>x</p>' });
+    await deleteAlert(env.DB, alert.id);
+    expect(await getAlertById(env.DB, alert.id)).toBeNull();
   });
 });
