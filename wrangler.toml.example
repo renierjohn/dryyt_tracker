@@ -1,0 +1,29 @@
+# Reference template only — NOT read by wrangler.
+#
+# The live config for this project is wrangler.jsonc (Cloudflare's newer,
+# preferred format; wrangler reads that file, not this one). This file exists
+# purely as a plain-text reference showing the config shape with placeholder
+# values, e.g. for onboarding someone setting up their own Cloudflare
+# account/database. See README.md's "Installation" section for how to use it.
+
+name = "dryyt-tracker"
+main = "worker/index.ts"
+compatibility_date = "2026-08-21"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "<YOUR_D1_DATABASE_NAME>"
+database_id = "<YOUR_D1_DATABASE_ID>"
+migrations_dir = "./migrations"
+
+[vars]
+# "true" enables the forgot-password dev-mode stand-in (no email service yet):
+# the reset link is returned directly in the API response instead of emailed.
+# Keep this "false" for any real/production deploy — leaving it "true" ships
+# a password-reset token to any caller who knows a user's email address.
+DEV_MODE = "false"
+
+[assets]
+directory = "./dist"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
