@@ -5,14 +5,15 @@ import { createUser } from '../worker/db';
 import { loadSession, requireAuth, requirePermission, createAndSetSession } from '../worker/middleware/auth';
 import type { AppBindings } from '../worker/types';
 
+// This file's tests create users directly via createUser() (bypassing /register) and some
+// assert on specific ids (e.g. id 1 for the superadmin-bypass check in requirePermission),
+// so tests within this file are not independent of each other's leftover rows — unlike the
+// route-level tests, which use unique emails per test and never depend on numeric ids.
+// Reset users/sessions between tests. Roles are seeded once by migrations and never deleted
+// by these tests, so they don't need re-seeding here.
 beforeEach(async () => {
-  // Reset database before each test to ensure clean state
   await env.DB.prepare('DELETE FROM sessions').run();
   await env.DB.prepare('DELETE FROM users').run();
-  // Re-insert the default roles that migrations create
-  await env.DB.prepare("INSERT INTO roles (id, name, permissions) VALUES (1, 'superadmin', '[\"*\"]'), (2, 'user', '[]')").run().catch(() => {
-    // Ignore error if roles already exist
-  });
 });
 
 function buildTestApp() {
@@ -50,7 +51,7 @@ describe('loadSession + requireAuth', () => {
 
     const res = await app.request('/whoami', { headers: { Cookie: cookie } }, env);
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = await res.json() as { user: { email: string } };
     expect(body.user.email).toBe('e@example.com');
   });
 });

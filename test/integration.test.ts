@@ -22,7 +22,8 @@ describe('full auth lifecycle', () => {
     let cookie = extractCookie(registerRes);
 
     const meRes = await SELF.fetch('https://example.com/api/auth/me', { headers: { Cookie: cookie } });
-    expect((await meRes.json()).user.email).toBe('lifecycle@example.com');
+    const meBody = await meRes.json() as { user: { email: string } };
+    expect(meBody.user.email).toBe('lifecycle@example.com');
 
     const logoutRes = await post('/api/auth/logout', undefined, cookie);
     expect(logoutRes.status).toBe(204);
@@ -32,7 +33,7 @@ describe('full auth lifecycle', () => {
     cookie = extractCookie(loginRes);
 
     const forgotRes = await post('/api/auth/forgot-password', { email: 'lifecycle@example.com' });
-    const { resetLink } = await forgotRes.json();
+    const { resetLink } = await forgotRes.json() as { resetLink: string };
     const token = new URL(resetLink).searchParams.get('token');
 
     const resetRes = await post('/api/auth/reset-password', { token, password: 'brand-new-password' });

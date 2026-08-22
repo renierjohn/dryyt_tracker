@@ -1,75 +1,54 @@
-# React + TypeScript + Vite
+# Dryyt Tracker
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A Cloudflare Worker (Hono + D1) backend with a Vite + React frontend, providing
+registration/login/logout, forgot/reset password, and a roles/permissions system
+with a bootstrap superadmin.
 
-Currently, two official plugins are available:
+## Running locally
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+Local dev and tests apply migrations to the local D1 database automatically
+(via `wrangler d1 migrations apply --local`, run implicitly by
+`vitest-pool-workers` for tests, and by `wrangler dev` for local runtime state).
 
 ```
+yarn install
+yarn dev:worker
+```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+`yarn dev:worker` runs `wrangler dev`, which serves both the Worker API
+(`/api/*`) and the built frontend together from one local server — this is the
+correct way to run the app locally.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+Bare `yarn dev` (plain `vite`) is frontend-only: it has no proxy to `/api`, so
+pages that call the backend (login, register, etc.) won't work against it. Use
+it only for pure frontend/CSS iteration where you don't need the API.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Testing
 
 ```
+yarn test
+```
+
+Runs the backend test suite against a real local D1 instance via
+`vitest-pool-workers` (no mocks). Migrations are applied automatically before
+the suite runs.
+
+## Deploying
+
+```
+yarn deploy
+```
+
+This builds the frontend and runs `wrangler deploy`.
+
+**Before the first real deploy**, the remote D1 database must have migrations
+applied manually — this is a separate, deliberate step and is *not* run by
+`yarn deploy`:
+
+```
+wrangler d1 migrations apply dryyt-tracker-db --remote
+```
+
+Do not run this against the remote database as part of routine local
+development; only run it deliberately when you intend to update the real
+production schema.

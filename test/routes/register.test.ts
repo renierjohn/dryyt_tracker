@@ -13,7 +13,7 @@ describe('POST /api/auth/register', () => {
   it('creates the first user as superadmin and sets a session cookie', async () => {
     const res = await registerRequest({ email: 'admin@example.com', password: 'password123', display_name: 'Admin' });
     expect(res.status).toBe(201);
-    const body = await res.json();
+    const body = await res.json() as { user: { email: string; role_name: string } };
     expect(body.user.email).toBe('admin@example.com');
     expect(body.user.role_name).toBe('superadmin');
     expect(res.headers.get('set-cookie')).toMatch(/session=/);
@@ -22,7 +22,7 @@ describe('POST /api/auth/register', () => {
   it('creates a second user with the default user role', async () => {
     await registerRequest({ email: 'first@example.com', password: 'password123', display_name: 'First' });
     const res = await registerRequest({ email: 'second@example.com', password: 'password123', display_name: 'Second' });
-    const body = await res.json();
+    const body = await res.json() as { user: { role_name: string } };
     expect(body.user.role_name).toBe('user');
   });
 
