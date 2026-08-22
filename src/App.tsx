@@ -1,18 +1,33 @@
-import { Routes, Route } from 'react-router-dom'
+import { Navigate, Routes, Route } from 'react-router-dom'
+import { useCurrentUser } from './lib/useCurrentUser'
+import Login from './pages/Login'
+import Register from './pages/Register'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
+import AuthedHome from './pages/AuthedHome'
 import './App.css'
 
-function Placeholder({ name }: { name: string }) {
-  return <div>{name} page — implemented in the next task</div>
-}
-
 function App() {
+  const { user, loading, refresh } = useCurrentUser()
+
+  if (loading) return <p>Loading…</p>
+
   return (
     <Routes>
-      <Route path="/" element={<Placeholder name="Home" />} />
-      <Route path="/login" element={<Placeholder name="Login" />} />
-      <Route path="/register" element={<Placeholder name="Register" />} />
-      <Route path="/forgot-password" element={<Placeholder name="Forgot password" />} />
-      <Route path="/reset-password" element={<Placeholder name="Reset password" />} />
+      <Route
+        path="/"
+        element={user ? <AuthedHome user={user} onLoggedOut={refresh} /> : <Navigate to="/login" replace />}
+      />
+      <Route
+        path="/login"
+        element={user ? <Navigate to="/" replace /> : <Login onLoggedIn={refresh} />}
+      />
+      <Route
+        path="/register"
+        element={user ? <Navigate to="/" replace /> : <Register onRegistered={refresh} />}
+      />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
     </Routes>
   )
 }
