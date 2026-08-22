@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:test';
 import { Hono } from 'hono';
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createUser } from '../worker/db';
+import { createUser, setUserActive } from '../worker/db';
 import { loadSession, requireAuth, requirePermission, createAndSetSession } from '../worker/middleware/auth';
 import type { AppBindings } from '../worker/types';
 
@@ -96,5 +96,25 @@ describe('requirePermission', () => {
 
     const res = await app.request('/admin-only', { headers: { Cookie: cookie } }, env);
     expect(res.status).toBe(200);
+  });
+});
+
+describe('loadSession + deactivated users', () => {
+  it('treats a deactivated user as unauthenticated, even with a valid session cookie', async () => {
+    const app = buildTestApp();
+    const user = await createUser(env.DB, {
+      email: 'deactivated-mw@example.com', passwordHash: 'h', passwordSalt: 's', roleId: 2, displayName: 'Deactivated',
+    });
+    const loginRes = await app.request(`/login-as/${user.id}`, { method: 'POST' }, env);
+    const cookie = extractCookie(loginRes);
+
+    // Confirm the session works before deactivation
+    const beforeRes = await app.request('/whoami', { headers: { Cookie: cookie } }, env);
+    expect(beforeRes.status).toBe(200);
+
+    await setUserActive(env.DB, user.id, false);
+
+    const afterRes = await app.request('/whoami', { headers: { Cookie: cookie } }, env);
+    expect(afterRes.status).toBe(401);
   });
 });

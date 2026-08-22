@@ -41,7 +41,7 @@ export async function loadSession(c: Context<AppBindings>, next: Next) {
     return next();
   }
   const result = await getSessionWithUser(c.env.DB, token);
-  if (!result || new Date(result.session.expires_at) < new Date()) {
+  if (!result || new Date(result.session.expires_at) < new Date() || !result.user.is_active) {
     c.set('user', null);
     return next();
   }
