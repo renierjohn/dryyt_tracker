@@ -46,6 +46,12 @@ describe('sanitizeHtml', () => {
     expect(result).not.toContain('javascript:');
   });
 
+  it('strips javascript: hrefs with an embedded tab/newline in the scheme', async () => {
+    const result = await sanitizeHtml('<a href="jav\tascript:alert(1)">click</a>');
+    expect(result).not.toContain('javascript:');
+    expect(result).not.toContain('href=');
+  });
+
   it('preserves lists', async () => {
     const result = await sanitizeHtml('<ul><li>one</li><li>two</li></ul>');
     expect(result).toBe('<ul><li>one</li><li>two</li></ul>');

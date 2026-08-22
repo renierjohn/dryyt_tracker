@@ -28,8 +28,11 @@ export async function sanitizeHtml(html: string): Promise<string> {
 
       if (tag === 'a') {
         const href = el.getAttribute('href');
-        if (href && /^\s*javascript:/i.test(href)) {
-          el.removeAttribute('href');
+        if (href) {
+          const normalized = href.replace(/[\x00-\x20]+/g, '');
+          if (/^javascript:/i.test(normalized)) {
+            el.removeAttribute('href');
+          }
         }
       }
     },
