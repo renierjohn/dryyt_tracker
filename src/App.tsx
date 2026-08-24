@@ -4,7 +4,7 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
-import AuthedHome from './pages/AuthedHome'
+import Dashboard from './pages/Dashboard'
 import './App.css'
 
 function App() {
@@ -16,7 +16,7 @@ function App() {
     <Routes>
       <Route
         path="/"
-        element={user ? <AuthedHome user={user} onLoggedOut={refresh} /> : <Navigate to="/login" replace />}
+        element={user ? <Dashboard user={user} refresh={refresh} /> : <Navigate to="/login" replace />}
       />
       <Route
         path="/login"
