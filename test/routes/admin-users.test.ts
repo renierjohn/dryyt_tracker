@@ -58,6 +58,17 @@ describe('POST /api/admin/users', () => {
     }, adminCookie);
     expect(res.status).toBe(409);
   });
+
+  it('rejects creating a user with role_id 1 (superadmin) with 400', async () => {
+    const adminRoleId = await getAdminRoleId();
+    const adminCookie = await createUserWithRoleAndLogin('admin-no-escalate@example.com', adminRoleId, 'Admin');
+    const res = await req('POST', '/api/admin/users', {
+      email: 'admin-escalate-attempt@example.com', password: 'password123', display_name: 'Escalate', role_id: 1,
+    }, adminCookie);
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as any;
+    expect(body.error).toBe('cannot_assign_superadmin_role');
+  });
 });
 
 describe('PUT /api/admin/users/:id', () => {
@@ -79,6 +90,18 @@ describe('PUT /api/admin/users/:id', () => {
     const superadminCookie = await createUserWithRoleAndLogin('will-be-id-1@example.com', 1, 'Superadmin');
     const res = await req('PUT', '/api/admin/users/1', { role_id: 2 }, superadminCookie);
     expect(res.status).toBe(400);
+  });
+
+  it('rejects promoting any user to role_id 1 (superadmin) with 400', async () => {
+    const adminRoleId = await getAdminRoleId();
+    const adminCookie = await createUserWithRoleAndLogin('admin-no-promote@example.com', adminRoleId, 'Admin');
+    const targetCookie = await createUserWithRoleAndLogin('target-no-escalate@example.com', 2, 'Target');
+    const targetMe = (await (await req('GET', '/api/auth/me', undefined, targetCookie)).json()) as any;
+
+    const res = await req('PUT', `/api/admin/users/${targetMe.user.id}`, { role_id: 1 }, adminCookie);
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as any;
+    expect(body.error).toBe('cannot_assign_superadmin_role');
   });
 });
 

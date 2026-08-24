@@ -66,6 +66,7 @@ adminRoutes.post('/users', async (c) => {
   if (!isValidEmail(email)) return c.json({ error: 'invalid_email' }, 400);
   if (password.length < 8) return c.json({ error: 'weak_password' }, 400);
   if (!displayName) return c.json({ error: 'missing_display_name' }, 400);
+  if (Number.isInteger(roleId) && roleId === 1) return c.json({ error: 'cannot_assign_superadmin_role' }, 400);
   const role = Number.isInteger(roleId) ? await getRoleById(c.env.DB, roleId) : null;
   if (!role) return c.json({ error: 'invalid_role' }, 400);
 
@@ -92,6 +93,9 @@ adminRoutes.put('/users/:id', async (c) => {
   const target = await getUserById(c.env.DB, targetId);
   if (!target) return c.json({ error: 'not_found' }, 404);
 
+  if (roleId !== undefined && roleId === 1) {
+    return c.json({ error: 'cannot_assign_superadmin_role' }, 400);
+  }
   if (roleId !== undefined && targetId === 1) {
     return c.json({ error: 'cannot_change_superadmin_role' }, 400);
   }
