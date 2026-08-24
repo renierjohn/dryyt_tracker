@@ -40,4 +40,16 @@ describe('POST /api/admin/users/:id/alerts', () => {
     }, plainCookie);
     expect(res.status).toBe(403);
   });
+
+  it('returns 404 when trying to inject to a nonexistent user', async () => {
+    const adminRoleId = await getAdminRoleId();
+    const adminCookie = await createUserWithRoleAndLogin('admin-nonexistent@example.com', adminRoleId, 'Admin Nonexistent');
+
+    const res = await req('POST', '/api/admin/users/999999/alerts', {
+      type: 'warning', visibility: 'public', body_html: '<p>target gone</p>',
+    }, adminCookie);
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as any;
+    expect(body.error).toBe('not_found');
+  });
 });

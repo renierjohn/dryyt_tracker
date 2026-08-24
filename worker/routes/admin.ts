@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { sanitizeHtml } from '../sanitize';
-import { createAlert } from '../db';
+import { createAlert, getUserById } from '../db';
 import type { DbAlert } from '../db';
 import { requirePermission } from '../middleware/auth';
 import type { AppBindings } from '../types';
@@ -23,6 +23,9 @@ adminRoutes.post('/users/:id/alerts', async (c) => {
   if (!ALERT_TYPES.has(type)) return c.json({ error: 'invalid_type' }, 400);
   if (!ALERT_VISIBILITIES.has(visibility)) return c.json({ error: 'invalid_visibility' }, 400);
   if (!bodyHtml.trim()) return c.json({ error: 'missing_body' }, 400);
+
+  const targetUser = await getUserById(c.env.DB, targetUserId);
+  if (!targetUser) return c.json({ error: 'not_found' }, 404);
 
   const sanitized = await sanitizeHtml(bodyHtml);
   const alert = await createAlert(c.env.DB, {
