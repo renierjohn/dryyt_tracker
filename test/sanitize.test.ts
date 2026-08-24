@@ -131,4 +131,115 @@ describe('sanitizeHtml', () => {
       expect(result).toContain('href="mailto:x@example.com"');
     });
   });
+
+  describe('double-encoded javascript: bypass of the entity decoder (residual finding)', () => {
+    // decodeHtmlEntities used to be a single left-to-right, non-recursive pass ending in
+    // `&amp;` -> `&`. For a double-encoded payload, the numeric-decode step ran BEFORE that
+    // last step could expose the numeric reference underneath, so it never fired -- and the
+    // resulting string then looked "scheme-less" and fell through to the "must be a relative
+    // link" branch, unstripped. These assert that no shape of double-encoding survives.
+
+    it('strips a double-encoded (named-then-numeric) javascript: href', async () => {
+      const result = await sanitizeHtml('<a href="&amp;#106;avascript:alert(1)">click</a>');
+      expect(result).not.toContain('javascript:');
+      expect(result).not.toContain('href=');
+    });
+
+    it('strips a double-encoded (decimal-then-numeric) javascript: href', async () => {
+      const result = await sanitizeHtml('<a href="&#38;#106;avascript:alert(1)">click</a>');
+      expect(result).not.toContain('javascript:');
+      expect(result).not.toContain('href=');
+    });
+
+    it('strips a triple-encoded javascript: href', async () => {
+      // &amp;amp;#106; -> (decode) &amp;#106; -> (decode) &#106; -> (decode) 'j'
+      const result = await sanitizeHtml('<a href="&amp;amp;#106;avascript:alert(1)">click</a>');
+      expect(result).not.toContain('javascript:');
+      expect(result).not.toContain('href=');
+    });
+
+    it('strips a numeric entity missing its terminating semicolon (fail-closed residue check)', async () => {
+      // Real browsers still decode a numeric character reference even without the trailing
+      // ";" (a parse error, not a rejection). Our decoder requires the ";", so this never
+      // resolves to "javascript:" internally -- it must be caught by the residual-entity
+      // fail-closed check instead of falling through as "no scheme, must be relative".
+      const result = await sanitizeHtml('<a href="&#106avascript:alert(1)">click</a>');
+      expect(result).not.toContain('javascript:');
+      expect(result).not.toContain('href=');
+    });
+
+    it('strips when decoding cannot reach a fixed point within the iteration cap', async () => {
+      // NESTED (not sibling) "amp;" layers: each decode pass peels exactly one layer off
+      // the front ("&" + "amp;"*N + rest -> "&" + "amp;"*(N-1) + rest), so N layers need N
+      // passes just to expose the numeric reference underneath, plus a couple more to
+      // resolve and then confirm it's stable -- comfortably more than the 8-pass cap. This
+      // must fail closed (stripped), not be treated as "fully decoded, no scheme found".
+      const deeplyNested = '&' + 'amp;'.repeat(20) + '#106;avascript:alert(1)';
+      const result = await sanitizeHtml(`<a href="${deeplyNested}">click</a>`);
+      expect(result).not.toContain('javascript:');
+      expect(result).not.toContain('href=');
+    });
+
+    it('does NOT strip a legitimate fragment link', async () => {
+      const result = await sanitizeHtml('<a href="#section">jump</a>');
+      expect(result).toContain('href="#section"');
+    });
+
+    it('does NOT strip a legitimate relative path link', async () => {
+      const result = await sanitizeHtml('<a href="/some/path">go</a>');
+      expect(result).toContain('href="/some/path"');
+    });
+
+    it('does NOT strip a legitimate relative link with an ordinary query string', async () => {
+      const result = await sanitizeHtml('<a href="/some/path?a=1&b=2">go</a>');
+      expect(result).toContain('href=');
+      expect(result).toContain('/some/path?a=1');
+    });
+
+    it('strips a decimal entity with a leading zero (&#0106;)', async () => {
+      const result = await sanitizeHtml('<a href="&#0106;avascript:alert(1)">click</a>');
+      expect(result).not.toContain('javascript:');
+      expect(result).not.toContain('href=');
+    });
+
+    it('strips an uppercase-hex, uppercase-X entity (&#X6A;)', async () => {
+      const result = await sanitizeHtml('<a href="&#X6A;avascript:alert(1)">click</a>');
+      expect(result).not.toContain('javascript:');
+      expect(result).not.toContain('href=');
+    });
+
+    it('strips a numeric entity with whitespace injected inside the entity syntax', async () => {
+      const result = await sanitizeHtml('<a href="&#\t106;avascript:alert(1)">click</a>');
+      expect(result).not.toContain('javascript:');
+      expect(result).not.toContain('href=');
+    });
+
+    it('still keeps https:// and mailto: hrefs after the fix', async () => {
+      const httpsResult = await sanitizeHtml('<a href="https://example.com">link</a>');
+      expect(httpsResult).toContain('href="https://example.com"');
+
+      const mailtoResult = await sanitizeHtml('<a href="mailto:x@example.com">email</a>');
+      expect(mailtoResult).toContain('href="mailto:x@example.com"');
+    });
+
+    it('integration: the double-encoded payload never survives sanitizeHtml() as decodable javascript: syntax', async () => {
+      const payloads = [
+        '&amp;#106;avascript:alert(1)',
+        '&#38;#106;avascript:alert(1)',
+        '&amp;amp;#106;avascript:alert(1)',
+        '&#106avascript:alert(1)',
+      ];
+      for (const payload of payloads) {
+        const result = await sanitizeHtml(`<p>before</p><a href="${payload}">click</a><p>after</p>`);
+        // No href attribute should remain at all for these payloads.
+        expect(result).not.toContain('href=');
+        // Belt-and-suspenders: no substring a browser could decode into a javascript: URL --
+        // no literal "javascript:", and no numeric/named entity residue that decodes to one.
+        expect(result).not.toContain('javascript:');
+        expect(result).not.toMatch(/&#x?6a;|&#106;?/i);
+        expect(result).toContain('<p>before</p>');
+        expect(result).toContain('<p>after</p>');
+      }
+    });
+  });
 });

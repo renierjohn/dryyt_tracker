@@ -37,7 +37,7 @@ const ALLOWED_HREF_SCHEMES = new Set(['http', 'https', 'mailto']);
 // references (decimal and hex) plus the handful of named entities that matter for this
 // specific bypass (NewLine/Tab/colon/amp) — not a full HTML named-entity table, which is
 // unnecessary for detecting a URL scheme.
-function decodeHtmlEntities(value: string): string {
+function decodeHtmlEntitiesOnce(value: string): string {
   return value
     .replace(/&#x([0-9a-fA-F]+);/gi, (_, hex: string) => String.fromCodePoint(parseInt(hex, 16)))
     .replace(/&#(\d+);/g, (_, dec: string) => String.fromCodePoint(parseInt(dec, 10)))
@@ -47,9 +47,56 @@ function decodeHtmlEntities(value: string): string {
     .replace(/&amp;/gi, '&');
 }
 
+// Hard cap on decode iterations. A single call above ISN'T idempotent in a way that
+// matters: for a double-encoded payload like `&amp;#106;avascript:`, the numeric-decode
+// step runs BEFORE the trailing `&amp;` -> `&` step in the same pass, so it never sees
+// the `&#106;` that only exists once `&amp;` has been unwrapped -- it takes a second
+// pass to expose it, a third to confirm nothing further changes, and so on for deeper
+// nesting. We loop to a fixed point instead of doing one pass. The cap exists so an
+// adversarial, arbitrarily-deep chain of encoding can't force unbounded work; hitting it
+// means we could NOT confirm the string was fully decoded, and callers must treat that
+// as a decode failure (fail closed) rather than "decoding is done".
+const MAX_DECODE_ITERATIONS = 8;
+
+function decodeHtmlEntities(value: string): { value: string; resolved: boolean } {
+  let current = value;
+  for (let i = 0; i < MAX_DECODE_ITERATIONS; i++) {
+    const next = decodeHtmlEntitiesOnce(current);
+    if (next === current) {
+      return { value: current, resolved: true };
+    }
+    current = next;
+  }
+  return { value: current, resolved: false };
+}
+
+// After decoding to a fixed point, does the string still contain something that LOOKS
+// like an entity reference decodeHtmlEntities didn't (fully) resolve? Any semicolon-
+// terminated numeric or named reference from our decode list is guaranteed to be gone
+// once decodeHtmlEntities reaches a fixed point, so a leftover match here can only be:
+//   - a numeric reference missing its terminating semicolon (`&#106avascript:`) --
+//     per the HTML5 tokenizer, numeric character references are decoded by real
+//     browsers REGARDLESS of a trailing semicolon (a missing one is just a parse
+//     error, not a rejection), so this is still live danger even though our own
+//     decoder (which requires the semicolon) left it untouched; or
+//   - one of our named entities (amp/newline/tab/colon) missing its semicolon, in a
+//     position where a browser's "ambiguous ampersand" handling would still expand it
+//     (i.e. NOT immediately followed by an alphanumeric or `=`, the two cases where
+//     browsers leave it as literal text instead).
+// Either way, a browser may still decode this further at render time, so it must be
+// treated as unresolved/unsafe rather than "no scheme, must be a relative link".
+const UNRESOLVED_ENTITY_RESIDUE = /&#x?[0-9a-fA-F]+|&(?:amp|newline|tab|colon)(?![a-zA-Z0-9=])/i;
+
 // Returns the decoded, safe href to store, or null if the href must be dropped entirely.
 function sanitizeHref(rawHref: string): string | null {
-  const decoded = decodeHtmlEntities(rawHref);
+  const { value: decoded, resolved } = decodeHtmlEntities(rawHref);
+
+  // Hit the iteration cap without the string stabilizing -- we can't be sure what this
+  // actually decodes to (or an attacker is deliberately nesting encodings to burn CPU).
+  // Fail closed.
+  if (!resolved) {
+    return null;
+  }
 
   // Strip control characters and whitespace before looking for a scheme — browsers ignore
   // these when parsing a URL, so `java&#9;script:` / `java&NewLine;script:` decode to
@@ -60,7 +107,18 @@ function sanitizeHref(rawHref: string): string | null {
   const normalized = decoded.replace(/[\x00-\x20]+/g, '');
 
   const schemeMatch = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(normalized);
-  if (schemeMatch && !ALLOWED_HREF_SCHEMES.has(schemeMatch[1].toLowerCase())) {
+  if (schemeMatch) {
+    if (!ALLOWED_HREF_SCHEMES.has(schemeMatch[1].toLowerCase())) {
+      return null;
+    }
+    return decoded;
+  }
+
+  // No scheme detected. This is normally a legitimate relative/fragment link
+  // (`#section`, `/some/path`) and should be let through. But if fully-decoded residue
+  // still looks entity-shaped, don't assume "no scheme" means "relative link" -- that
+  // assumption IS the bug this function exists to fix. Fail closed instead.
+  if (UNRESOLVED_ENTITY_RESIDUE.test(normalized)) {
     return null;
   }
 
@@ -96,10 +154,16 @@ export async function sanitizeHtml(html: string): Promise<string> {
           if (safeHref === null) {
             el.removeAttribute('href');
           } else {
-            // Write back the DECODED value. HTMLRewriter re-escapes it correctly on
-            // serialization, so this also fixes the (unrelated) usability wrinkle of a
-            // legitimately-escaped "&amp;" in a query string round-tripping cleanly,
-            // rather than only ever stripping anything that contained an entity.
+            // Write back the DECODED value. Verified empirically that HTMLRewriter/lol-html's
+            // setAttribute does NOT re-escape a literal "&" on serialization (a prior version
+            // of this comment claimed it did -- it doesn't: sanitizeHtml('<a href="?a=1&b=2">')
+            // round-trips the "&" raw, byte for byte). That's fine BECAUSE sanitizeHref() above
+            // guarantees the decoded value it returns contains no leftover entity-shaped residue
+            // (see UNRESOLVED_ENTITY_RESIDUE) -- a bare "&" not followed by anything that looks
+            // like character-reference syntax is inert. Writing back the decoded value also
+            // fixes the (unrelated) usability wrinkle of a legitimately-escaped "&amp;" in a
+            // query string round-tripping cleanly, rather than only ever stripping anything that
+            // contained an entity.
             el.setAttribute('href', safeHref);
           }
         }
