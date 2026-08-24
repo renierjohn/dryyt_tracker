@@ -1,9 +1,10 @@
 import { Hono } from 'hono';
-import { hashPassword, verifyPassword } from '../crypto';
-import { getUserByEmail, getUserById, updateUserProfile, updatePasswordHash, deleteSessionsForUser } from '../db';
+import { hashPassword, verifyPassword, generateToken } from '../crypto';
+import { getUserByEmail, getUserById, updateUserProfile, updatePasswordHash, deleteSessionsForUser, setUserAvatarKey } from '../db';
 import { requireAuth, createAndSetSession } from '../middleware/auth';
 import { isValidEmail, toPublicUser } from '../util';
 import { getRoleById } from '../db';
+import { detectImageMimeType } from '../image';
 import type { AppBindings } from '../types';
 
 export const profileRoutes = new Hono<AppBindings>();
@@ -65,4 +66,37 @@ profileRoutes.put('/password', async (c) => {
   await createAndSetSession(c, authUser.id);
 
   return c.json({ ok: true });
+});
+
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
+const EXTENSION_BY_MIME_TYPE: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+};
+
+profileRoutes.post('/avatar', async (c) => {
+  const authUser = c.get('user')!;
+  const body = await c.req.parseBody();
+  const file = body['file'];
+
+  if (!(file instanceof File)) return c.json({ error: 'missing_file' }, 400);
+  if (file.size > MAX_AVATAR_BYTES) return c.json({ error: 'file_too_large' }, 400);
+
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const mimeType = detectImageMimeType(bytes);
+  if (!mimeType) return c.json({ error: 'unsupported_file_type' }, 400);
+
+  const user = await getUserById(c.env.DB, authUser.id);
+  const previousKey = user!.avatar_key;
+
+  const key = `${authUser.id}-${generateToken()}.${EXTENSION_BY_MIME_TYPE[mimeType]}`;
+  await c.env.AVATARS.put(key, bytes, { httpMetadata: { contentType: mimeType } });
+  await setUserAvatarKey(c.env.DB, authUser.id, key);
+
+  if (previousKey) {
+    await c.env.AVATARS.delete(previousKey);
+  }
+
+  return c.json({ avatar_key: key });
 });
