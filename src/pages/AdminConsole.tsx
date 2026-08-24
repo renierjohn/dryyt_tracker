@@ -28,6 +28,13 @@ export default function AdminConsole() {
   }
 
   useEffect(() => {
+    // loadUsers is async and only calls setUsers/setError after its internal `await
+    // apiFetch(...)` resolves — that's the same "fetch in an effect, setState in a .then"
+    // shape React's docs recommend, just factored into a named helper (shared with the
+    // create-user form's onCreated callback) instead of an inline promise chain. It does
+    // not set state synchronously during the effect's own execution, so this is a false
+    // positive for this specific case.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadUsers();
   }, []);
 

@@ -1,8 +1,11 @@
 import { SELF, env } from 'cloudflare:test';
 import { describe, it, expect } from 'vitest';
+import type { Env } from '../../worker/types';
 
-// Cast env to any to allow access to AVATARS binding
-const typedEnv = env as any;
+// cloudflare:test's `env` is typed as the (unaugmented, effectively empty) `Cloudflare.Env`
+// global — cast through `unknown` to the worker's actual `Env` shape to access the AVATARS
+// binding with real types instead of `any`.
+const typedEnv = env as unknown as Env;
 
 function post(path: string, body?: unknown, cookie?: string) {
   return SELF.fetch(`https://example.com${path}`, {
