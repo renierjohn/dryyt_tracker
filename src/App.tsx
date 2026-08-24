@@ -5,6 +5,7 @@ import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 import Dashboard from './pages/Dashboard'
+import UserPage from './pages/UserPage'
 import './App.css'
 
 function App() {
@@ -28,6 +29,7 @@ function App() {
       />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/users/:id" element={<UserPage />} />
     </Routes>
   )
 }
