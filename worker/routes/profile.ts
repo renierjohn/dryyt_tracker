@@ -1,8 +1,7 @@
 import { Hono } from 'hono';
-import { getCookie } from 'hono/cookie';
 import { hashPassword, verifyPassword } from '../crypto';
-import { getUserByEmail, getUserById, updateUserProfile, updatePasswordHash, deleteSessionsForUser, createSession } from '../db';
-import { requireAuth, SESSION_COOKIE } from '../middleware/auth';
+import { getUserByEmail, getUserById, updateUserProfile, updatePasswordHash, deleteSessionsForUser } from '../db';
+import { requireAuth, createAndSetSession } from '../middleware/auth';
 import { isValidEmail, toPublicUser } from '../util';
 import { getRoleById } from '../db';
 import type { AppBindings } from '../types';
@@ -35,7 +34,15 @@ profileRoutes.put('/', async (c) => {
     return c.json({ error: 'missing_display_name' }, 400);
   }
 
-  const updated = await updateUserProfile(c.env.DB, authUser.id, { displayName, email });
+  let updated;
+  try {
+    updated = await updateUserProfile(c.env.DB, authUser.id, { displayName, email });
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('UNIQUE')) {
+      return c.json({ error: 'email_taken' }, 409);
+    }
+    throw err;
+  }
   const role = await getRoleById(c.env.DB, updated.role_id);
   return c.json({ user: toPublicUser(updated, role!) });
 });
@@ -54,13 +61,8 @@ profileRoutes.put('/password', async (c) => {
 
   const { hash, salt } = await hashPassword(newPassword);
   await updatePasswordHash(c.env.DB, authUser.id, hash, salt);
-
-  const currentToken = getCookie(c, SESSION_COOKIE);
   await deleteSessionsForUser(c.env.DB, authUser.id);
-  if (currentToken) {
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-    await createSession(c.env.DB, currentToken, authUser.id, expiresAt);
-  }
+  await createAndSetSession(c, authUser.id);
 
   return c.json({ ok: true });
 });

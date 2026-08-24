@@ -80,9 +80,10 @@ describe('PUT /api/profile/password', () => {
     const otherLoginRes = await post('/api/auth/login', { email: 'pw-sessions@example.com', password: 'password123' });
     const otherCookie = extractCookie(otherLoginRes);
 
-    await put('/api/profile/password', { current_password: 'password123', new_password: 'newpassword456' }, cookie);
+    const pwChangeRes = await put('/api/profile/password', { current_password: 'password123', new_password: 'newpassword456' }, cookie);
+    const newCookie = extractCookie(pwChangeRes);
 
-    const currentStillWorks = await SELF.fetch('https://example.com/api/auth/me', { headers: { Cookie: cookie } });
+    const currentStillWorks = await SELF.fetch('https://example.com/api/auth/me', { headers: { Cookie: newCookie } });
     expect(currentStillWorks.status).toBe(200);
 
     const otherNowRejected = await SELF.fetch('https://example.com/api/auth/me', { headers: { Cookie: otherCookie } });
