@@ -32,19 +32,31 @@ export default function AdminConsole() {
   }, []);
 
   async function handleDeactivate(id: number) {
-    await apiFetch(`/admin/users/${id}/deactivate`, { method: 'POST' });
-    await loadUsers();
+    try {
+      await apiFetch(`/admin/users/${id}/deactivate`, { method: 'POST' });
+      await loadUsers();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.code : 'unknown_error');
+    }
   }
 
   async function handleReactivate(id: number) {
-    await apiFetch(`/admin/users/${id}/reactivate`, { method: 'POST' });
-    await loadUsers();
+    try {
+      await apiFetch(`/admin/users/${id}/reactivate`, { method: 'POST' });
+      await loadUsers();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.code : 'unknown_error');
+    }
   }
 
   async function handleInjectAlert(values: AlertFormValues) {
     if (alertTargetId === null) return;
-    await apiFetch(`/admin/users/${alertTargetId}/alerts`, { method: 'POST', body: JSON.stringify(values) });
-    setAlertTargetId(null);
+    try {
+      await apiFetch(`/admin/users/${alertTargetId}/alerts`, { method: 'POST', body: JSON.stringify(values) });
+      setAlertTargetId(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.code : 'unknown_error');
+    }
   }
 
   return (
