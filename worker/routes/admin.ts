@@ -93,6 +93,10 @@ adminRoutes.put('/users/:id', async (c) => {
   const target = await getUserById(c.env.DB, targetId);
   if (!target) return c.json({ error: 'not_found' }, 404);
 
+  if (displayName !== undefined && !displayName) {
+    return c.json({ error: 'missing_display_name' }, 400);
+  }
+
   if (roleId !== undefined && roleId === 1) {
     return c.json({ error: 'cannot_assign_superadmin_role' }, 400);
   }

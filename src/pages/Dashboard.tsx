@@ -164,23 +164,42 @@ function AlertsPanel() {
   }
 
   useEffect(() => {
+    // loadAlerts is async and only calls setAlerts/setError after its internal `await
+    // apiFetch(...)` resolves — that's the same "fetch in an effect, setState in a .then"
+    // shape React's docs recommend, just factored into a named helper (shared with the
+    // create/update/delete handlers) instead of an inline promise chain. It does not set
+    // state synchronously during the effect's own execution, so this is a false positive
+    // for this specific case.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadAlerts();
   }, []);
 
   async function handleCreate(values: AlertFormValues) {
-    await apiFetch('/alerts', { method: 'POST', body: JSON.stringify(values) });
-    await loadAlerts();
+    try {
+      await apiFetch('/alerts', { method: 'POST', body: JSON.stringify(values) });
+      await loadAlerts();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.code : 'unknown_error');
+    }
   }
 
   async function handleUpdate(id: number, values: AlertFormValues) {
-    await apiFetch(`/alerts/${id}`, { method: 'PUT', body: JSON.stringify(values) });
-    setEditingId(null);
-    await loadAlerts();
+    try {
+      await apiFetch(`/alerts/${id}`, { method: 'PUT', body: JSON.stringify(values) });
+      setEditingId(null);
+      await loadAlerts();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.code : 'unknown_error');
+    }
   }
 
   async function handleDelete(id: number) {
-    await apiFetch(`/alerts/${id}`, { method: 'DELETE' });
-    await loadAlerts();
+    try {
+      await apiFetch(`/alerts/${id}`, { method: 'DELETE' });
+      await loadAlerts();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.code : 'unknown_error');
+    }
   }
 
   return (

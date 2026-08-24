@@ -29,8 +29,10 @@ describe('GET /api/admin/users', () => {
     const adminCookie = await createUserWithRoleAndLogin('admin-list@example.com', adminRoleId, 'Admin List');
     const res = await req('GET', '/api/admin/users', undefined, adminCookie);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as any;
-    const found = body.users.find((u: { email: string }) => u.email === 'admin-list@example.com');
+    const body = (await res.json()) as {
+      users: Array<{ email: string; role_name: string; password_hash?: unknown; password_salt?: unknown }>;
+    };
+    const found = body.users.find((u) => u.email === 'admin-list@example.com')!;
     expect(found.role_name).toBe('admin');
     expect(found.password_hash).toBeUndefined();
     expect(found.password_salt).toBeUndefined();
@@ -66,7 +68,7 @@ describe('POST /api/admin/users', () => {
       email: 'admin-escalate-attempt@example.com', password: 'password123', display_name: 'Escalate', role_id: 1,
     }, adminCookie);
     expect(res.status).toBe(400);
-    const body = (await res.json()) as any;
+    const body = (await res.json()) as { error: string };
     expect(body.error).toBe('cannot_assign_superadmin_role');
   });
 });
@@ -76,11 +78,11 @@ describe('PUT /api/admin/users/:id', () => {
     const adminRoleId = await getAdminRoleId();
     const adminCookie = await createUserWithRoleAndLogin('admin-editor@example.com', adminRoleId, 'Admin Editor');
     const targetCookie = await createUserWithRoleAndLogin('admin-edit-target@example.com', 2, 'Edit Target');
-    const targetMe = (await (await req('GET', '/api/auth/me', undefined, targetCookie)).json()) as any;
+    const targetMe = (await (await req('GET', '/api/auth/me', undefined, targetCookie)).json()) as { user: { id: number } };
 
     const res = await req('PUT', `/api/admin/users/${targetMe.user.id}`, { display_name: 'Renamed', role_id: adminRoleId }, adminCookie);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as any;
+    const body = (await res.json()) as { user: { display_name: string; role_name: string } };
     expect(body.user.display_name).toBe('Renamed');
     expect(body.user.role_name).toBe('admin');
   });
@@ -96,12 +98,36 @@ describe('PUT /api/admin/users/:id', () => {
     const adminRoleId = await getAdminRoleId();
     const adminCookie = await createUserWithRoleAndLogin('admin-no-promote@example.com', adminRoleId, 'Admin');
     const targetCookie = await createUserWithRoleAndLogin('target-no-escalate@example.com', 2, 'Target');
-    const targetMe = (await (await req('GET', '/api/auth/me', undefined, targetCookie)).json()) as any;
+    const targetMe = (await (await req('GET', '/api/auth/me', undefined, targetCookie)).json()) as { user: { id: number } };
 
     const res = await req('PUT', `/api/admin/users/${targetMe.user.id}`, { role_id: 1 }, adminCookie);
     expect(res.status).toBe(400);
-    const body = (await res.json()) as any;
+    const body = (await res.json()) as { error: string };
     expect(body.error).toBe('cannot_assign_superadmin_role');
+  });
+
+  it('rejects an empty display_name with 400 (Finding 5)', async () => {
+    const adminRoleId = await getAdminRoleId();
+    const adminCookie = await createUserWithRoleAndLogin('admin-empty-name@example.com', adminRoleId, 'Admin');
+    const targetCookie = await createUserWithRoleAndLogin('empty-name-target@example.com', 2, 'Target');
+    const targetMe = (await (await req('GET', '/api/auth/me', undefined, targetCookie)).json()) as { user: { id: number } };
+
+    const res = await req('PUT', `/api/admin/users/${targetMe.user.id}`, { display_name: '' }, adminCookie);
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe('missing_display_name');
+  });
+
+  it('rejects a whitespace-only display_name with 400 (Finding 5)', async () => {
+    const adminRoleId = await getAdminRoleId();
+    const adminCookie = await createUserWithRoleAndLogin('admin-whitespace-name@example.com', adminRoleId, 'Admin');
+    const targetCookie = await createUserWithRoleAndLogin('whitespace-name-target@example.com', 2, 'Target');
+    const targetMe = (await (await req('GET', '/api/auth/me', undefined, targetCookie)).json()) as { user: { id: number } };
+
+    const res = await req('PUT', `/api/admin/users/${targetMe.user.id}`, { display_name: '   ' }, adminCookie);
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe('missing_display_name');
   });
 });
 
@@ -110,7 +136,7 @@ describe('POST /api/admin/users/:id/deactivate and /reactivate', () => {
     const adminRoleId = await getAdminRoleId();
     const adminCookie = await createUserWithRoleAndLogin('admin-deactivator@example.com', adminRoleId, 'Deactivator');
     const targetCookie = await createUserWithRoleAndLogin('deactivate-target@example.com', 2, 'Deactivate Target');
-    const targetMe = (await (await req('GET', '/api/auth/me', undefined, targetCookie)).json()) as any;
+    const targetMe = (await (await req('GET', '/api/auth/me', undefined, targetCookie)).json()) as { user: { id: number } };
     const targetId = targetMe.user.id;
 
     const deactivateRes = await req('POST', `/api/admin/users/${targetId}/deactivate`, undefined, adminCookie);

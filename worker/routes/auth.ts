@@ -53,6 +53,13 @@ authRoutes.post('/login', async (c) => {
   const valid = await verifyPassword(password, user.password_hash, user.password_salt);
   if (!valid) return c.json({ error: 'invalid_credentials' }, 401);
 
+  // A deactivated user must not be able to log in at all — return the SAME error as a
+  // wrong password so this doesn't leak account existence/state to the caller. Without
+  // this, loadSession's is_active check only catches it on the user's *next* request,
+  // leaving a live session behind that deleteSessionsForUser (called on deactivation) was
+  // supposed to prevent.
+  if (!user.is_active) return c.json({ error: 'invalid_credentials' }, 401);
+
   await createAndSetSession(c, user.id);
   const role = await getRoleById(c.env.DB, user.role_id);
   return c.json({ user: toPublicUser(user, role!) });
