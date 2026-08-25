@@ -21,6 +21,7 @@ export interface DbSession {
   token: string;
   user_id: number;
   expires_at: string;
+  impersonator_id: number | null;
 }
 
 export interface DbPasswordReset {
@@ -99,6 +100,19 @@ export async function createSession(
     .run();
 }
 
+export async function createMasqueradeSession(
+  db: D1Database,
+  token: string,
+  userId: number,
+  expiresAt: string,
+  impersonatorId: number,
+): Promise<void> {
+  await db
+    .prepare('INSERT INTO sessions (token, user_id, expires_at, impersonator_id) VALUES (?, ?, ?, ?)')
+    .bind(token, userId, expiresAt, impersonatorId)
+    .run();
+}
+
 export async function getSessionWithUser(
   db: D1Database,
   token: string,
@@ -106,6 +120,7 @@ export async function getSessionWithUser(
   const row = await db
     .prepare(
       `SELECT s.token as s_token, s.user_id as s_user_id, s.expires_at as s_expires_at,
+              s.impersonator_id as s_impersonator_id,
               u.id as u_id, u.email as u_email, u.password_hash as u_password_hash,
               u.password_salt as u_password_salt, u.role_id as u_role_id,
               u.display_name as u_display_name, u.avatar_key as u_avatar_key, u.is_active as u_is_active, u.created_at as u_created_at,
@@ -119,7 +134,12 @@ export async function getSessionWithUser(
     .first<Record<string, unknown>>();
   if (!row) return null;
   return {
-    session: { token: row.s_token as string, user_id: row.s_user_id as number, expires_at: row.s_expires_at as string },
+    session: {
+      token: row.s_token as string,
+      user_id: row.s_user_id as number,
+      expires_at: row.s_expires_at as string,
+      impersonator_id: (row.s_impersonator_id as number | null) ?? null,
+    },
     user: {
       id: row.u_id as number,
       email: row.u_email as string,

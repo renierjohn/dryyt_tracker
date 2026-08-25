@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { CKEditor } from '@ckeditor/ckeditor5-react';
 import { ClassicEditor, Essentials, Paragraph, Bold, Italic, Link, List } from 'ckeditor5';
 import 'ckeditor5/ckeditor5.css';
+import '../assets/sass/alert-editor.scss';
 
 export interface AlertFormValues {
   type: 'info' | 'success' | 'warning' | 'danger';
@@ -34,24 +35,26 @@ export default function AlertEditor({
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <label>
-        Type
-        <select value={type} onChange={(e) => setType(e.target.value as AlertFormValues['type'])}>
-          <option value="info">Info</option>
-          <option value="success">Success</option>
-          <option value="warning">Warning</option>
-          <option value="danger">Danger</option>
-        </select>
-      </label>
-      <label>
-        Visibility
-        <select value={visibility} onChange={(e) => setVisibility(e.target.value as AlertFormValues['visibility'])}>
-          <option value="dashboard">Dashboard only</option>
-          <option value="public">Public only</option>
-          <option value="both">Both</option>
-        </select>
-      </label>
+    <form className="alert-editor" onSubmit={handleSubmit}>
+      <div className="alert-editor__fields">
+        <label>
+          Type
+          <select value={type} onChange={(e) => setType(e.target.value as AlertFormValues['type'])}>
+            <option value="info">Info</option>
+            <option value="success">Success</option>
+            <option value="warning">Warning</option>
+            <option value="danger">Danger</option>
+          </select>
+        </label>
+        <label>
+          Visibility
+          <select value={visibility} onChange={(e) => setVisibility(e.target.value as AlertFormValues['visibility'])}>
+            <option value="dashboard">Dashboard only</option>
+            <option value="public">Public only</option>
+            <option value="both">Both</option>
+          </select>
+        </label>
+      </div>
       <CKEditor
         editor={ClassicEditor}
         data={bodyHtml}
@@ -62,7 +65,7 @@ export default function AlertEditor({
         }}
         onChange={(_event, editor) => setBodyHtml(editor.getData())}
       />
-      <button type="submit" disabled={submitting}>{submitLabel}</button>
+      <button className="alert-editor__submit" type="submit" disabled={submitting}>{submitLabel}</button>
     </form>
   );
 }

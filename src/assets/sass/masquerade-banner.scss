@@ -1,0 +1,38 @@
+.masquerade-banner {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 10px 16px;
+  background: #f59e0b;
+  color: #1c1400;
+  font-size: 14px;
+
+  [role='alert'] {
+    color: #7f1d1d;
+    font-weight: 500;
+  }
+
+  button {
+    font: inherit;
+    font-weight: 500;
+    color: inherit;
+    background: rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+    padding: 4px 12px;
+    cursor: pointer;
+
+    &:hover {
+      background: rgba(0, 0, 0, 0.18);
+    }
+
+    &:focus-visible {
+      outline: 2px solid #1c1400;
+      outline-offset: 1px;
+    }
+  }
+}

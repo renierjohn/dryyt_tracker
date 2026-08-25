@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch, ApiError } from '../lib/api';
+import '../assets/sass/auth-form.scss';
 
 export default function Register({ onRegistered }: { onRegistered: () => Promise<void> }) {
   const [email, setEmail] = useState('');
@@ -25,9 +26,9 @@ export default function Register({ onRegistered }: { onRegistered: () => Promise
   }
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form className="auth-form" onSubmit={handleSubmit}>
       <h1>Register</h1>
-      {error && <p role="alert">{error}</p>}
+      {error && <p className="auth-form__error" role="alert">{error}</p>}
       <label>
         Display name
         <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
@@ -40,7 +41,7 @@ export default function Register({ onRegistered }: { onRegistered: () => Promise
         Password
         <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
       </label>
-      <button type="submit">Register</button>
+      <button className="auth-form__button" type="submit">Register</button>
     </form>
   );
 }

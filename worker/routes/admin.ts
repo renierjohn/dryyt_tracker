@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { sanitizeHtml } from '../sanitize';
 import { createAlert, getUserById, listUsersWithRoles, updateUserAdminFields, setUserActive, getUserByEmail, getRoleById, createUser, deleteSessionsForUser } from '../db';
 import type { DbAlert } from '../db';
-import { requirePermission } from '../middleware/auth';
+import { requirePermission, startMasquerade } from '../middleware/auth';
 import { hashPassword } from '../crypto';
 import { isValidEmail, toPublicUser } from '../util';
 import type { AppBindings } from '../types';
@@ -126,6 +126,21 @@ adminRoutes.post('/users/:id/deactivate', async (c) => {
 
   await setUserActive(c.env.DB, targetId, false);
   await deleteSessionsForUser(c.env.DB, targetId);
+  return c.json({ ok: true });
+});
+
+adminRoutes.post('/users/:id/masquerade', async (c) => {
+  const admin = c.get('user')!;
+  const targetId = Number(c.req.param('id'));
+
+  if (targetId === admin.id) return c.json({ error: 'cannot_masquerade_as_self' }, 400);
+  if (targetId === 1) return c.json({ error: 'cannot_masquerade_as_superadmin' }, 400);
+
+  const target = await getUserById(c.env.DB, targetId);
+  if (!target) return c.json({ error: 'not_found' }, 404);
+  if (!target.is_active) return c.json({ error: 'user_deactivated' }, 400);
+
+  await startMasquerade(c, target.id, admin.id);
   return c.json({ ok: true });
 });
 
