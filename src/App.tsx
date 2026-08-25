@@ -7,7 +7,7 @@ import ResetPassword from './pages/ResetPassword'
 import Dashboard from './pages/Dashboard'
 import UserPage from './pages/UserPage'
 import AdminConsole from './pages/AdminConsole'
-import './App.css'
+import './assets/sass/app.scss'
 
 function App() {
   const { user, loading, refresh } = useCurrentUser()

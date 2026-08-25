@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { apiFetch, ApiError } from '../lib/api';
 import AlertEditor, { type AlertFormValues } from '../components/AlertEditor';
+import '../assets/sass/admin-console.scss';
 
 interface AdminUser {
   id: number;
@@ -17,6 +18,7 @@ export default function AdminConsole() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [alertTargetId, setAlertTargetId] = useState<number | null>(null);
+  const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
 
   async function loadUsers() {
     try {
@@ -56,6 +58,17 @@ export default function AdminConsole() {
     }
   }
 
+  async function handleUpdateUser(values: { email: string; display_name: string; role_id?: number }) {
+    if (editingUser === null) return;
+    try {
+      await apiFetch(`/admin/users/${editingUser.id}`, { method: 'PUT', body: JSON.stringify(values) });
+      setEditingUser(null);
+      await loadUsers();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.code : 'unknown_error');
+    }
+  }
+
   async function handleInjectAlert(values: AlertFormValues) {
     if (alertTargetId === null) return;
     try {
@@ -67,11 +80,11 @@ export default function AdminConsole() {
   }
 
   return (
-    <div>
+    <div className="admin-console">
       <h1>Admin console</h1>
-      {error && <p role="alert">{error}</p>}
+      {error && <p className="admin-console__error" role="alert">{error}</p>}
       <CreateUserForm onCreated={loadUsers} />
-      <table>
+      <table className="admin-console__table">
         <thead>
           <tr>
             <th>Email</th>
@@ -87,8 +100,12 @@ export default function AdminConsole() {
               <td>{u.email}</td>
               <td>{u.display_name}</td>
               <td>{u.role_name}</td>
-              <td>{u.is_active ? 'yes' : 'no'}</td>
               <td>
+                <span className={`admin-console__status admin-console__status--${u.is_active ? 'active' : 'inactive'}`}>
+                  {u.is_active ? 'yes' : 'no'}
+                </span>
+              </td>
+              <td className="admin-console__actions">
                 {u.is_active ? (
                   <button onClick={() => handleDeactivate(u.id)} disabled={u.id === 1}>
                     Deactivate
@@ -97,16 +114,23 @@ export default function AdminConsole() {
                   <button onClick={() => handleReactivate(u.id)}>Reactivate</button>
                 )}
                 <button onClick={() => setAlertTargetId(u.id)}>Inject alert</button>
+                <button onClick={() => setEditingUser(u)}>Edit</button>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
       {alertTargetId !== null && (
-        <div>
+        <div className="admin-console__panel">
           <h2>Inject alert for user {alertTargetId}</h2>
           <AlertEditor submitLabel="Send alert" onSubmit={handleInjectAlert} />
           <button onClick={() => setAlertTargetId(null)}>Cancel</button>
+        </div>
+      )}
+      {editingUser !== null && (
+        <div className="admin-console__panel">
+          <h2>Edit user {editingUser.email}</h2>
+          <EditUserForm user={editingUser} onSubmit={handleUpdateUser} onCancel={() => setEditingUser(null)} />
         </div>
       )}
     </div>
@@ -138,7 +162,7 @@ function CreateUserForm({ onCreated }: { onCreated: () => Promise<void> }) {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form className="admin-console__form" onSubmit={handleSubmit}>
       <h2>Create user</h2>
       {error && <p role="alert">{error}</p>}
       <label>
@@ -158,6 +182,61 @@ function CreateUserForm({ onCreated }: { onCreated: () => Promise<void> }) {
         <input type="number" value={roleId} onChange={(e) => setRoleId(Number(e.target.value))} required />
       </label>
       <button type="submit">Create</button>
+    </form>
+  );
+}
+
+function EditUserForm({
+  user,
+  onSubmit,
+  onCancel,
+}: {
+  user: AdminUser;
+  onSubmit: (values: { email: string; display_name: string; role_id?: number }) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [email, setEmail] = useState(user.email);
+  const [displayName, setDisplayName] = useState(user.display_name);
+  const [roleId, setRoleId] = useState(user.role_id);
+  const [error, setError] = useState<string | null>(null);
+  const isSuperadmin = user.id === 1;
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    try {
+      // The superadmin's role can never change server-side (PUT rejects it with
+      // cannot_change_superadmin_role) — omit role_id entirely rather than resend
+      // the unchanged value, which would still trip that check.
+      await onSubmit({ email, display_name: displayName, ...(isSuperadmin ? {} : { role_id: roleId }) });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.code : 'unknown_error');
+    }
+  }
+
+  return (
+    <form className="admin-console__form" onSubmit={handleSubmit}>
+      {error && <p role="alert">{error}</p>}
+      <label>
+        Email
+        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+      </label>
+      <label>
+        Display name
+        <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
+      </label>
+      <label>
+        Role ID
+        <input
+          type="number"
+          value={roleId}
+          onChange={(e) => setRoleId(Number(e.target.value))}
+          required
+          disabled={isSuperadmin}
+        />
+      </label>
+      <button type="submit">Save</button>
+      <button type="button" onClick={onCancel}>Cancel</button>
     </form>
   );
 }
