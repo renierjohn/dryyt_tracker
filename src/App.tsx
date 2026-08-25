@@ -23,7 +23,11 @@ function App() {
       <Routes>
         <Route
           path="/"
-          element={user ? <Home user={user} refresh={refresh} /> : <Navigate to="/login" replace />}
+          element={
+            !user ? <Navigate to="/login" replace />
+            : hasManageUsers(user) ? <Home user={user} refresh={refresh} />
+            : <Navigate to="/dashboard" replace />
+          }
         />
         <Route
           path="/login"
