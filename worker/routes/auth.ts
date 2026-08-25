@@ -4,6 +4,7 @@ import {
   createUserWithBootstrapRole, getUserByEmail, getRoleById,
   createPasswordReset, consumePasswordReset,
   updatePasswordHash, deleteSessionsForUser, deleteAllPasswordResetsForUser,
+  consumeDevLoginToken,
 } from '../db';
 import { createAndSetSession, requireAuth, clearSession } from '../middleware/auth';
 import { isValidEmail, toPublicUser } from '../util';
@@ -68,6 +69,22 @@ authRoutes.post('/login', async (c) => {
 authRoutes.post('/logout', async (c) => {
   await clearSession(c);
   return c.body(null, 204);
+});
+
+// Dev-only: mints a real session from a one-time token created by script/auth/session.js,
+// so that script can hand back a URL instead of a raw cookie value to paste into devtools.
+// Gated on DEV_MODE so the endpoint is inert in production even if a token leaked.
+authRoutes.get('/dev-login', async (c) => {
+  if (c.env.DEV_MODE !== 'true') return c.json({ error: 'not_found' }, 404);
+
+  const token = c.req.query('token') ?? '';
+  const record = token ? await consumeDevLoginToken(c.env.DB, token) : null;
+  if (!record || new Date(record.expires_at) < new Date()) {
+    return c.json({ error: 'invalid_or_expired_token' }, 400);
+  }
+
+  await createAndSetSession(c, record.user_id);
+  return c.redirect('/');
 });
 
 authRoutes.get('/me', requireAuth, (c) => {

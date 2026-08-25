@@ -29,6 +29,12 @@ export interface DbPasswordReset {
   expires_at: string;
 }
 
+export interface DbDevLoginToken {
+  token: string;
+  user_id: number;
+  expires_at: string;
+}
+
 // Not used by registration (would reconstruct a count-then-insert race) — see createUserWithBootstrapRole.
 export async function countUsers(db: D1Database): Promise<number> {
   const row = await db.prepare('SELECT COUNT(*) as count FROM users').first<{ count: number }>();
@@ -174,6 +180,28 @@ export async function consumePasswordReset(db: D1Database, token: string): Promi
     .prepare('DELETE FROM password_resets WHERE token = ? RETURNING *')
     .bind(token)
     .first<DbPasswordReset>();
+  return row ?? null;
+}
+
+export async function createDevLoginToken(
+  db: D1Database,
+  token: string,
+  userId: number,
+  expiresAt: string,
+): Promise<void> {
+  await db
+    .prepare('INSERT INTO dev_login_tokens (token, user_id, expires_at) VALUES (?, ?, ?)')
+    .bind(token, userId, expiresAt)
+    .run();
+}
+
+// Atomically deletes and returns the token row in one statement (same single-use
+// pattern as consumePasswordReset) so the link can only mint one session.
+export async function consumeDevLoginToken(db: D1Database, token: string): Promise<DbDevLoginToken | null> {
+  const row = await db
+    .prepare('DELETE FROM dev_login_tokens WHERE token = ? RETURNING *')
+    .bind(token)
+    .first<DbDevLoginToken>();
   return row ?? null;
 }
 
