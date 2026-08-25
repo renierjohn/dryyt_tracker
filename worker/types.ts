@@ -16,5 +16,5 @@ export interface AuthUser {
 
 export type AppBindings = {
   Bindings: Env;
-  Variables: { user: AuthUser | null };
+  Variables: { user: AuthUser | null; impersonatorId: number | null };
 };

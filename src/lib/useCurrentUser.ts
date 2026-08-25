@@ -11,15 +11,21 @@ export interface AuthUser {
   avatar_key: string | null;
 }
 
+export interface Masquerade {
+  by_display_name: string;
+}
+
 export function useCurrentUser() {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [masquerade, setMasquerade] = useState<Masquerade | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const body = await apiFetch<{ user: AuthUser }>('/auth/me');
+      const body = await apiFetch<{ user: AuthUser; masquerade: Masquerade | null }>('/auth/me');
       setUser(body.user);
+      setMasquerade(body.masquerade);
     } catch (err) {
       // Any failure here (401 unauthenticated, or a network blip/unexpected error)
       // should behave like "not logged in" rather than crash — this call is fired
@@ -29,6 +35,7 @@ export function useCurrentUser() {
         console.error('Failed to load current user', err);
       }
       setUser(null);
+      setMasquerade(null);
     } finally {
       setLoading(false);
     }
@@ -41,5 +48,5 @@ export function useCurrentUser() {
     void refresh();
   }, [refresh]);
 
-  return { user, loading, refresh };
+  return { user, masquerade, loading, refresh };
 }

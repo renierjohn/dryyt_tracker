@@ -59,3 +59,15 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 16px;
+  color: var(--accent);
+  font-size: 14px;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}

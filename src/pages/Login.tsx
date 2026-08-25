@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch, ApiError } from '../lib/api';
+import '../assets/sass/auth-form.scss';
 
 export default function Login({ onLoggedIn }: { onLoggedIn: () => Promise<void> }) {
   const [email, setEmail] = useState('');
@@ -21,9 +22,9 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => Promise<void> 
   }
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form className="auth-form" onSubmit={handleSubmit}>
       <h1>Log in</h1>
-      {error && <p role="alert">{error}</p>}
+      {error && <p className="auth-form__error" role="alert">{error}</p>}
       <label>
         Email
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
@@ -32,8 +33,8 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => Promise<void> 
         Password
         <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
       </label>
-      <button type="submit">Log in</button>
-      <p>
+      <button className="auth-form__button" type="submit">Log in</button>
+      <p className="auth-form__footer">
         <a href="/forgot-password">Forgot password?</a> · <a href="/register">Register</a>
       </p>
     </form>

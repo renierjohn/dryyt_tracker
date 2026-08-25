@@ -4,6 +4,44 @@ A Cloudflare Worker (Hono + D1) backend with a Vite + React frontend, providing
 registration/login/logout, forgot/reset password, and a roles/permissions system
 with a bootstrap superadmin.
 
+## Features
+
+- **Auth**: register, login/logout, forgot/reset password (`/register`,
+  `/login`, `/forgot-password`, `/reset-password`). Sessions are opaque tokens
+  in a `sessions` D1 table, set as an httpOnly cookie.
+- **Roles & permissions**: two seeded roles — `superadmin` (id 1, permission
+  `*`) and `user` (id 2, no permissions). The very first registered user is
+  bootstrapped into `superadmin`; everyone after that gets `user`. Routes are
+  gated with `requirePermission('<name>')` middleware
+  (`worker/middleware/auth.ts`) checking the caller's role permissions.
+- **Homepage** (`/`): a minimal landing page after login — welcome message,
+  role, log out, and a link to wherever that account's own settings live
+  (`/dashboard` or `/admin`, below).
+- **Profile** (change display name/email/password, upload an avatar — stored
+  in R2, served from `/api/avatars/:key`) plus a user's own **Alerts** (see
+  below): at `/dashboard` for a plain `user`, or folded into `/admin` for a
+  `manage_users` account (see Admin console). Visiting the wrong one for your
+  role redirects to the right one.
+- **Alerts**: users can post rich-text (CKEditor) alerts on their own profile,
+  scoped to `dashboard` (only they see it), `public` (shown on their public
+  profile page, `/users/:id`), or `both`.
+- **Admin console** (`/admin`, requires the `manage_users` permission — which
+  only `*`/superadmin has by default): the account's own profile/password/
+  alerts (see above), plus: list all users in a table; create, edit (email/
+  display name/role), deactivate/reactivate users; inject an alert onto any
+  user's dashboard. The superadmin account (id 1) can't be deactivated or
+  have its role changed, from the UI or the API.
+- **Masquerade**: from the admin console, "Masquerade" on any active,
+  non-superadmin user swaps the caller's session cookie to a session logged in
+  as that user (`sessions.impersonator_id` on the new session row records who
+  started it — the original admin session is left untouched). A banner shown
+  on every page while masquerading has a "Return to admin" button that ends
+  the masquerade session and mints a fresh one for the original admin — no
+  re-login needed. Since permission checks run against whoever the *current*
+  session belongs to, a masquerading admin has exactly the target user's
+  permissions for the duration (including no access to `/admin/*` routes,
+  so nested masquerading isn't possible).
+
 ## Installation
 
 Prerequisites: Node.js, `yarn`, and a Cloudflare account with the `wrangler`
@@ -71,18 +109,63 @@ Local dev and tests apply migrations to the local D1 database automatically
 (via `wrangler d1 migrations apply --local`, run implicitly by
 `vitest-pool-workers` for tests, and by `wrangler dev` for local runtime state).
 
+There are two ways to run the app locally, depending on what you're working on:
+
+**Worker-only** — serves both the Worker API (`/api/*`) and the *built*
+frontend from one local server. Use this to test the real, production-shaped
+build (including auth cookies, redirects, etc.):
+
 ```
-yarn install
+yarn build
 yarn dev:worker
 ```
 
-`yarn dev:worker` runs `wrangler dev`, which serves both the Worker API
-(`/api/*`) and the built frontend together from one local server — this is the
-correct way to run the app locally.
+`yarn dev:worker` runs `wrangler dev` on `http://localhost:8787`. Since it
+serves the frontend from `dist/`, re-run `yarn build` after frontend changes
+to see them (no HMR).
 
-Bare `yarn dev` (plain `vite`) is frontend-only: it has no proxy to `/api`, so
-pages that call the backend (login, register, etc.) won't work against it. Use
-it only for pure frontend/CSS iteration where you don't need the API.
+**Frontend with HMR** — for iterating on React/CSS with instant reload, while
+still exercising the real backend:
+
+```
+yarn dev:worker   # terminal 1 — worker on :8787
+yarn dev          # terminal 2 — vite on :5173
+```
+
+`vite.config.ts` proxies `/api/*` from `:5173` to `:8787` (`changeOrigin:
+true`), so `apiFetch`'s same-origin `/api/...` calls reach the real worker —
+login, cookies, and everything else behave the same as hitting `:8787`
+directly. Use `http://localhost:5173` in your browser.
+
+### Logging in as a user without a password
+
+`script/auth/session.js` is a dev-only helper for skipping the login form. It
+mints a one-time login token directly in the local D1 database and prints a
+URL:
+
+```
+node script/auth/session.js                    # superadmin (role_id=1), local D1
+node script/auth/session.js user@example.com    # a specific user
+node script/auth/session.js user@example.com --base-url http://localhost:5173
+```
+
+Opening the printed URL (`GET /api/auth/dev-login?token=...`) exchanges the
+token for a real session and sets the session cookie via a redirect to `/`.
+The token is single-use and expires after 5 minutes. This only works when the
+worker is running with `DEV_MODE=true` (see `.dev.vars` above) — it 404s
+otherwise, so it's inert against a real deploy even if a token leaked.
+Pass `--remote` to mint the token against the real D1 database instead (only
+do this deliberately, same caution as the migrations section below).
+
+## Styling
+
+Styles live in `src/assets/sass` as `.scss`, one file per page/component
+(`base.scss` for global resets/tokens, `app.scss`, `dashboard.scss`,
+`admin-console.scss`, `alert-editor.scss`), each imported directly by the
+React file it styles. Shared design tokens (colors, fonts) are CSS custom
+properties in `_variables.scss`, with a `prefers-color-scheme: dark` override
+— use `var(--accent)`, `var(--border)`, etc. rather than hardcoding colors so
+new components stay consistent in both themes.
 
 ## Testing
 

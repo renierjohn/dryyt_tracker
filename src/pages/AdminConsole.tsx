@@ -1,6 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { apiFetch, ApiError } from '../lib/api';
 import AlertEditor, { type AlertFormValues } from '../components/AlertEditor';
+import type { AuthUser } from '../lib/useCurrentUser';
+import ProfileSettings from './ProfileSettings';
 import '../assets/sass/admin-console.scss';
 
 interface AdminUser {
@@ -14,7 +17,7 @@ interface AdminUser {
   created_at: string;
 }
 
-export default function AdminConsole() {
+export default function AdminConsole({ user, refresh }: { user: AuthUser; refresh: () => Promise<void> }) {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [alertTargetId, setAlertTargetId] = useState<number | null>(null);
@@ -58,6 +61,15 @@ export default function AdminConsole() {
     }
   }
 
+  async function handleMasquerade(id: number) {
+    try {
+      await apiFetch(`/admin/users/${id}/masquerade`, { method: 'POST' });
+      await refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.code : 'unknown_error');
+    }
+  }
+
   async function handleUpdateUser(values: { email: string; display_name: string; role_id?: number }) {
     if (editingUser === null) return;
     try {
@@ -81,6 +93,8 @@ export default function AdminConsole() {
 
   return (
     <div className="admin-console">
+      <Link className="back-link" to="/">← Home</Link>
+      <ProfileSettings user={user} refresh={refresh} />
       <h1>Admin console</h1>
       {error && <p className="admin-console__error" role="alert">{error}</p>}
       <CreateUserForm onCreated={loadUsers} />
@@ -115,6 +129,9 @@ export default function AdminConsole() {
                 )}
                 <button onClick={() => setAlertTargetId(u.id)}>Inject alert</button>
                 <button onClick={() => setEditingUser(u)}>Edit</button>
+                <button onClick={() => handleMasquerade(u.id)} disabled={u.id === 1 || u.id === user.id || !u.is_active}>
+                  Masquerade
+                </button>
               </td>
             </tr>
           ))}

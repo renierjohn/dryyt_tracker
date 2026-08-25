@@ -1,12 +1,12 @@
 import { Hono } from 'hono';
 import { hashPassword, verifyPassword, generateToken } from '../crypto';
 import {
-  createUserWithBootstrapRole, getUserByEmail, getRoleById,
+  createUserWithBootstrapRole, getUserByEmail, getRoleById, getUserById,
   createPasswordReset, consumePasswordReset,
   updatePasswordHash, deleteSessionsForUser, deleteAllPasswordResetsForUser,
   consumeDevLoginToken,
 } from '../db';
-import { createAndSetSession, requireAuth, clearSession } from '../middleware/auth';
+import { createAndSetSession, requireAuth, clearSession, returnFromMasquerade } from '../middleware/auth';
 import { isValidEmail, toPublicUser } from '../util';
 import type { AppBindings } from '../types';
 
@@ -87,8 +87,19 @@ authRoutes.get('/dev-login', async (c) => {
   return c.redirect('/');
 });
 
-authRoutes.get('/me', requireAuth, (c) => {
-  return c.json({ user: c.get('user') });
+authRoutes.get('/me', requireAuth, async (c) => {
+  const impersonatorId = c.get('impersonatorId');
+  const impersonator = impersonatorId !== null ? await getUserById(c.env.DB, impersonatorId) : null;
+  return c.json({
+    user: c.get('user'),
+    masquerade: impersonator ? { by_display_name: impersonator.display_name } : null,
+  });
+});
+
+authRoutes.post('/return-to-admin', requireAuth, async (c) => {
+  const impersonatorId = await returnFromMasquerade(c);
+  if (impersonatorId === null) return c.json({ error: 'not_masquerading' }, 400);
+  return c.json({ ok: true });
 });
 
 authRoutes.post('/forgot-password', async (c) => {
