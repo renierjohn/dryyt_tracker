@@ -1,4 +1,4 @@
-import type { PluginManifest } from '../sdk';
+import type { PluginManifest } from '../types';
 
 const manifest: PluginManifest = {
   id: 'hello',

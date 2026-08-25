@@ -1,22 +1,7 @@
-// Shared types (and re-exported app helpers) for plugin frontend code. This is the
-// one file plugin code should reach out of the plugins/ tree through — keeps the
-// "how do I call the app" surface centralized instead of every plugin page reaching
-// into src/lib/* directly.
-import type { ReactNode } from 'react';
-
+// Shared surface for plugin *frontend* code — the one file plugin pages/routes
+// should reach out of the plugins/ tree through, instead of importing src/lib/*
+// directly. Backend code (including manifest.ts, which the worker also reads)
+// should import types from ./types instead — that file has no runtime deps on
+// browser-only code like apiFetch.
+export * from './types';
 export { apiFetch, ApiError } from '../src/lib/api';
-
-export interface PluginRoute {
-  path: string;
-  element: ReactNode;
-  // Omit for "any authenticated user"; App.tsx checks this the same way it checks
-  // manage_users for /admin (via permissions.includes('*') || includes(requiredPermission)).
-  requiredPermission?: string;
-}
-
-export interface PluginManifest {
-  id: string;
-  navLabel: string;
-  navPath: string;
-  requiredPermission?: string;
-}
