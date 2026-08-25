@@ -157,6 +157,54 @@ otherwise, so it's inert against a real deploy even if a token leaked.
 Pass `--remote` to mint the token against the real D1 database instead (only
 do this deliberately, same caution as the migrations section below).
 
+## Plugins
+
+`plugins/<name>/` holds a self-contained feature with its own frontend, backend,
+and (optionally) migrations:
+
+```
+plugins/<name>/
+  manifest.ts       # { id, navLabel, navPath, requiredPermission? } — shows up
+                     # in the "Plugins" nav on / and /dashboard when omitted or
+                     # satisfied
+  frontend/
+    routes.tsx       # exports PluginRoute[] ({ path, element, requiredPermission? })
+    pages/
+  backend/
+    routes.ts        # exports a Hono sub-router (same shape as worker/routes/*.ts)
+  migrations/
+    0001_*.sql
+```
+
+See `plugins/hello` for a working example (a page at `/plugins/hello` that pings
+`POST /api/plugins/hello/ping`, backed by its own `hello_plugin_visits` table).
+
+Wiring, by layer:
+- **Frontend**: `src/plugins/loadPlugins.ts` uses `import.meta.glob` to
+  auto-discover every `plugins/*/frontend/routes.tsx` and `plugins/*/manifest.ts`
+  — `App.tsx` renders the routes and `PluginNav` renders the manifests. Adding a
+  plugin needs zero edits to `App.tsx`.
+- **Backend**: Workers bundle statically, so there's no runtime discovery here —
+  `worker/plugins.ts` is the one place each plugin's router gets imported and
+  mounted (`app.route('/api/plugins/<id>', router)` in `worker/index.ts`). One
+  import + one array entry per plugin.
+- **Migrations**: `wrangler d1 migrations` needs one flat, sequentially-numbered
+  directory, so a plugin's own `migrations/*.sql` can't apply on its own. Run
+  `yarn plugins:sync` after adding/editing one — it copies every plugin's
+  migrations into the root `migrations/` folder, renumbered into a reserved
+  per-plugin block (`1000`-`1099`, `1100`-`1199`, ... by alphabetical plugin
+  order) so they always sort after the core app's (`0001`-`0999`) and never
+  collide with each other. The generated files are marked with a header comment
+  and regenerated from scratch each run — edit the plugin's source migration,
+  not the copy in `migrations/`.
+- Plugin frontend code should import shared types/helpers (`PluginRoute`,
+  `PluginManifest`, `apiFetch`, `ApiError`) from `plugins/sdk.ts` rather than
+  reaching into `src/lib/*` directly — it's the one seam between the plugin tree
+  and the app.
+
+`requiredPermission` (on either a route or the manifest) gates it exactly like
+`/admin` gates on `manage_users` — omit it for "any authenticated user."
+
 ## Styling
 
 Styles live in `src/assets/sass` as `.scss`, one file per page/component

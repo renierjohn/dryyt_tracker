@@ -1,6 +1,6 @@
 import { Navigate, Routes, Route } from 'react-router-dom'
 import { useCurrentUser } from './lib/useCurrentUser'
-import { hasManageUsers } from './lib/permissions'
+import { hasManageUsers, hasPermission } from './lib/permissions'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
@@ -10,6 +10,7 @@ import Dashboard from './pages/Dashboard'
 import UserPage from './pages/UserPage'
 import AdminConsole from './pages/AdminConsole'
 import MasqueradeBanner from './components/MasqueradeBanner'
+import { pluginRoutes } from './plugins/loadPlugins'
 import './assets/sass/app.scss'
 
 function App() {
@@ -56,6 +57,18 @@ function App() {
             : <Navigate to="/dashboard" replace />
           }
         />
+        {pluginRoutes.map((route) => (
+          <Route
+            key={route.path}
+            path={route.path}
+            element={
+              !user ? <Navigate to="/login" replace />
+              : route.requiredPermission && !hasPermission(user, route.requiredPermission)
+                ? <Navigate to="/" replace />
+                : route.element
+            }
+          />
+        ))}
       </Routes>
     </>
   )

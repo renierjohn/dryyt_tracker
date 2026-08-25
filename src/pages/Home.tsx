@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import type { AuthUser } from '../lib/useCurrentUser';
 import { hasManageUsers } from '../lib/permissions';
 import LogoutButton from '../components/LogoutButton';
+import PluginNav from '../components/PluginNav';
 import '../assets/sass/home.scss';
 
 export default function Home({ user, refresh }: { user: AuthUser; refresh: () => Promise<void> }) {
@@ -15,6 +16,7 @@ export default function Home({ user, refresh }: { user: AuthUser; refresh: () =>
       <p>
         <Link to={admin ? '/admin' : '/dashboard'}>Go to {admin ? 'admin console' : 'dashboard'}</Link>
       </p>
+      <PluginNav user={user} />
     </div>
   );
 }
