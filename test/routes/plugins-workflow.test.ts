@@ -90,3 +90,27 @@ describe('PUT /api/plugins/workflow/transactions/:id/status', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('GET /api/plugins/workflow/track/:code', () => {
+  it('returns the transaction status with no auth required, omitting contact/created_by', async () => {
+    const adminRoleId = await getAdminRoleId();
+    const adminCookie = await createUserWithRoleAndLogin('workflow-track@example.com', adminRoleId, 'Admin');
+    const createRes = await req('POST', '/api/plugins/workflow/transactions', {
+      customer_name: 'Track Target', customer_contact: 'secret@example.com', description: 'Trousers',
+    }, adminCookie);
+    const created = (await createRes.json()) as { transaction: { code: string } };
+
+    const res = await SELF.fetch(`https://example.com/api/plugins/workflow/track/${created.transaction.code.toLowerCase()}`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { transaction: Record<string, unknown> };
+    expect(body.transaction.customer_name).toBe('Track Target');
+    expect(body.transaction.status).toBe('hold');
+    expect(body.transaction.customer_contact).toBeUndefined();
+    expect(body.transaction.created_by).toBeUndefined();
+  });
+
+  it('returns 404 for an unknown code', async () => {
+    const res = await SELF.fetch('https://example.com/api/plugins/workflow/track/ZZZZZZ');
+    expect(res.status).toBe(404);
+  });
+});

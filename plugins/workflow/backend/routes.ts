@@ -9,6 +9,16 @@ import { generateCode } from './code';
 // single-purpose plugin routers (e.g. hello, alerts) do it.
 const workflowRoutes = new Hono<AppBindings>();
 
+workflowRoutes.get('/track/:code', async (c) => {
+  const code = c.req.param('code').toUpperCase();
+  const row = await c.env.DB
+    .prepare('SELECT code, customer_name, description, status, updated_at FROM workflow_transactions WHERE code = ?')
+    .bind(code)
+    .first();
+  if (!row) return c.json({ error: 'not_found' }, 404);
+  return c.json({ transaction: row });
+});
+
 const STATUSES = new Set(['hold', 'in_progress', 'done', 'ready_to_pickup']);
 
 export interface WorkflowTransaction {
