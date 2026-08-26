@@ -2,10 +2,10 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the `plugins/hello` scaffold plugin with `plugins/workflow`, a
-transaction-status tracker: admins register a transaction and move it through
-`hold` → `in_progress` → `done` → `ready_to_pickup`; anyone can look up a
-transaction's status with its 6-character code, no login required.
+**Goal:** Add `plugins/workflow` alongside the existing `plugins/hello` scaffold
+plugin (disabled, not removed): admins register a transaction and move it
+through `hold` → `in_progress` → `done` → `ready_to_pickup`; anyone can look up
+a transaction's status with its 6-character code, no login required.
 
 **Architecture:** A self-contained plugin (`plugins/workflow/`) owns the
 `workflow_transactions` table and all admin-facing CRUD (register, list, set
@@ -25,21 +25,19 @@ on the same plugin router has no auth applied. Two core-app files change:
 - Admin-only endpoints/pages reuse the existing `manage_users` permission — no new permission is introduced.
 - `/track` is a **core** route (registered directly in `App.tsx`, no auth wrapping) — plugin routes in this codebase are always gated behind login, so a public page cannot be a `PluginRoute`.
 - After adding/editing any file under `plugins/workflow/migrations/`, run `yarn plugins:sync` before running tests — the root `migrations/` directory (which `vitest.config.ts` reads at startup) is a generated copy.
-- `plugins/hello/` is deleted in full; nothing in this plan re-references it except the one migration that drops the table it left behind.
+- `plugins/hello/` stays in the repo, untouched except `enabled: false` in its `manifest.ts` — it is disabled, not deleted. `worker/plugins.ts` keeps registering it (the existing `enabled !== false` filter is what takes it dark).
 
 ---
 
-### Task 1: Remove `hello`, scaffold `workflow` — register + list transactions
+### Task 1: Disable `hello`, scaffold `workflow` — register + list transactions
 
 **Files:**
-- Delete: `plugins/hello/` (entire directory)
+- Modify: `plugins/hello/manifest.ts` (add `enabled: false`)
 - Create: `plugins/workflow/manifest.ts`
 - Create: `plugins/workflow/backend/code.ts`
 - Create: `plugins/workflow/backend/routes.ts`
 - Create: `plugins/workflow/migrations/0001_init.sql`
-- Create: `plugins/workflow/migrations/0002_drop_hello_visits.sql`
 - Modify: `worker/plugins.ts`
-- Modify: `plugins/.migration-blocks.json`
 - Test: `test/workflow-code.test.ts`
 - Test: `test/routes/plugins-workflow.test.ts`
 
@@ -48,11 +46,25 @@ on the same plugin router has no auth applied. Two core-app files change:
 - Produces: `WorkflowTransaction` interface (`plugins/workflow/backend/routes.ts`) — `{ id, code, customer_name, customer_contact, description, status, created_by, created_at, updated_at }`. Tasks 2 and 3 extend this same file.
 - Produces: `POST /api/plugins/workflow/transactions` and `GET /api/plugins/workflow/transactions`, both gated by `requirePermission('manage_users')`.
 
-- [ ] **Step 1: Delete the hello plugin**
+- [ ] **Step 1: Disable the hello plugin**
 
-```bash
-rm -rf plugins/hello
+Modify `plugins/hello/manifest.ts` — add `enabled: false`:
+
+```ts
+import type { PluginManifest } from '../types';
+
+const manifest: PluginManifest = {
+  id: 'hello',
+  navLabel: 'Hello plugin',
+  navPath: '/plugins/hello',
+  enabled: false,
+};
+
+export default manifest;
 ```
+
+Nothing else under `plugins/hello/` changes — its routes, pages, and migration
+stay exactly as they are, simply unreachable while `enabled` is `false`.
 
 - [ ] **Step 2: Write the failing test for code generation**
 
@@ -140,25 +152,11 @@ CREATE TABLE workflow_transactions (
 );
 ```
 
-Create `plugins/workflow/migrations/0002_drop_hello_visits.sql`:
+`hello` keeps its own `plugins/hello/migrations/0001_init.sql` untouched —
+it's still a registered (if disabled) plugin, so its table isn't going
+anywhere and nothing drops it.
 
-```sql
-DROP TABLE IF EXISTS hello_plugin_visits;
-```
-
-- [ ] **Step 8: Clear the stale migration-block entry**
-
-Overwrite `plugins/.migration-blocks.json`:
-
-```json
-{}
-```
-
-(`yarn plugins:sync` in Step 10 fills this back in with `{"workflow": 1000}` —
-`hello`'s old entry must be cleared manually first since the sync script never
-prunes stale keys on its own, only adds new ones.)
-
-- [ ] **Step 9: Write the failing tests for register + list**
+- [ ] **Step 8: Write the failing tests for register + list**
 
 Create `test/routes/plugins-workflow.test.ts`:
 
@@ -224,7 +222,7 @@ describe('GET /api/plugins/workflow/transactions', () => {
 });
 ```
 
-- [ ] **Step 10: Implement the router, wire it up, sync migrations**
+- [ ] **Step 9: Implement the router, wire it up, sync migrations**
 
 Create `plugins/workflow/backend/routes.ts`:
 
@@ -305,8 +303,9 @@ workflowRoutes.get('/transactions', requirePermission('manage_users'), async (c)
 export default workflowRoutes;
 ```
 
-Modify `worker/plugins.ts` — replace the hello import/registration with workflow's,
-keeping the file's existing explanatory header comment as-is:
+Modify `worker/plugins.ts` — add workflow's import/registration alongside
+hello's existing one, keeping the file's existing explanatory header comment
+and hello's registration as-is:
 
 ```ts
 // The one manual registration point for plugin backends. Workers bundle statically
@@ -319,10 +318,13 @@ keeping the file's existing explanatory header comment as-is:
 import type { Hono } from 'hono';
 import type { AppBindings } from './types';
 import type { PluginManifest } from '../plugins/types';
+import helloManifest from '../plugins/hello/manifest';
+import helloRoutes from '../plugins/hello/backend/routes';
 import workflowManifest from '../plugins/workflow/manifest';
 import workflowRoutes from '../plugins/workflow/backend/routes';
 
 const registrations: { manifest: PluginManifest; router: Hono<AppBindings> }[] = [
+  { manifest: helloManifest, router: helloRoutes },
   { manifest: workflowManifest, router: workflowRoutes },
 ];
 
@@ -338,25 +340,25 @@ yarn plugins:sync
 ```
 
 Expected output: `Synced 2 plugin migration(s) into migrations/.` — confirm
-`migrations/1000_hello__init.sql` is gone and `migrations/1000_workflow__init.sql`
-/ `migrations/1001_workflow__drop_hello_visits.sql` exist, and
-`plugins/.migration-blocks.json` now reads `{"workflow": 1000}`.
+`migrations/1000_hello__init.sql` still exists unchanged, a new
+`migrations/1100_workflow__init.sql` now exists, and
+`plugins/.migration-blocks.json` reads `{"hello": 1000, "workflow": 1100}`.
 
-- [ ] **Step 11: Run the tests to verify they pass**
+- [ ] **Step 10: Run the tests to verify they pass**
 
 Run: `yarn vitest run test/workflow-code.test.ts test/routes/plugins-workflow.test.ts`
 Expected: PASS (5 tests)
 
-- [ ] **Step 12: Run the full suite to confirm nothing else broke**
+- [ ] **Step 11: Run the full suite to confirm nothing else broke**
 
 Run: `yarn test`
-Expected: PASS — no test referenced `hello`, so removing it shouldn't break anything else.
+Expected: PASS — `hello`'s own routes/table are untouched, just no longer mounted, so nothing that exercised them changes behavior (and no existing test exercised them).
 
-- [ ] **Step 13: Commit**
+- [ ] **Step 12: Commit**
 
 ```bash
 git add -A
-git commit -m "feat: replace hello plugin with workflow transaction tracking (register + list)"
+git commit -m "feat: add workflow transaction tracking plugin (register + list), disable hello"
 ```
 
 ---

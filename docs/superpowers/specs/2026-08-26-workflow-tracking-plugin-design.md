@@ -1,11 +1,22 @@
 # Workflow Tracking Plugin — Design Spec
 
-Replaces `plugins/hello` (the trivial scaffold plugin) with `plugins/workflow`: a
-transaction-status tracker. Admins register a transaction (a customer's order) and
-move it through a fixed set of statuses; the customer looks up its status with a
-6-character code, without needing an account.
+Adds `plugins/workflow`, a transaction-status tracker, alongside the existing
+`plugins/hello` scaffold plugin (disabled, not removed — see below). Admins
+register a transaction (a customer's order) and move it through a fixed set of
+statuses; the customer looks up its status with a 6-character code, without
+needing an account.
 
 ## Decisions (confirmed with user)
+
+- **`hello` is disabled, not deleted.** Originally this spec removed
+  `plugins/hello` entirely. That changed mid-implementation: `hello` stays in
+  the repo as a working example plugin, just switched off via
+  `manifest.enabled = false` (the flag `plugins/types.ts` already defines for
+  exactly this). `worker/plugins.ts` keeps importing and registering both
+  plugins — the `enabled !== false` filter it already runs is what keeps a
+  disabled plugin's nav link, page, and API dark. No files under
+  `plugins/hello/` are touched, and the `hello_plugin_visits` table is left in
+  place (nothing drops it, since the plugin isn't going anywhere).
 
 - **Homepage becomes public.** `/` currently renders only for logged-in admins
   (`hasManageUsers(user)`); every other visitor — logged out, or a logged-in
@@ -48,7 +59,8 @@ move it through a fixed set of statuses; the customer looks up its status with a
 
 ```
 plugins/
-  workflow/                        # replaces plugins/hello/
+  hello/                            # unchanged, except manifest.ts: enabled: false
+  workflow/                        # new, alongside hello/
     manifest.ts                    # { id: 'workflow', navLabel: 'Workflow',
                                     #   navPath: '/plugins/workflow',
                                     #   requiredPermission: 'manage_users' }
@@ -63,7 +75,6 @@ plugins/
         WorkflowAdminPage.tsx      # register form + transactions table w/ status controls
     migrations/
       0001_init.sql                # CREATE TABLE workflow_transactions
-      0002_drop_hello_visits.sql   # DROP TABLE hello_plugin_visits
 
 src/
   pages/
@@ -72,15 +83,12 @@ src/
   App.tsx                          # "/" no longer redirects; new public "/track" route
 ```
 
-`plugins/hello/` is deleted in full (manifest, backend, frontend, migration).
-`worker/plugins.ts` drops the hello import/registration and adds workflow's.
-`plugins/.migration-blocks.json`'s `"hello": 1000` entry is replaced by a
-`"workflow"` entry (new block, assigned by `yarn plugins:sync`); the old
-`hello_plugin_visits` table is dropped via a *new* migration in the workflow
-plugin rather than editing/deleting the old one (migrations are append-only
-history — the old `hello` migration doesn't come back, it's just gone along with
-the rest of the deleted plugin, and `0002_drop_hello_visits.sql` cleans up the
-table it left behind in any DB that already applied it).
+`plugins/hello/` is untouched except one line in its `manifest.ts`
+(`enabled: false`). `worker/plugins.ts` keeps hello's import/registration and
+adds workflow's alongside it. `plugins/.migration-blocks.json` keeps its
+`"hello": 1000` entry (hello's migration still exists and still needs a
+stable block) and gains a `"workflow"` entry for the next free block,
+assigned by `yarn plugins:sync`.
 
 ## Data model
 
@@ -99,12 +107,6 @@ CREATE TABLE workflow_transactions (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-```
-
-`plugins/workflow/migrations/0002_drop_hello_visits.sql`:
-
-```sql
-DROP TABLE IF EXISTS hello_plugin_visits;
 ```
 
 ## Backend
