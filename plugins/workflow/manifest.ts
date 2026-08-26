@@ -1,10 +1,10 @@
 import type { PluginManifest } from '../types';
 
 const manifest: PluginManifest = {
-  id: 'hello',
-  navLabel: 'Hello plugin',
-  navPath: '/plugins/hello',
-  enabled: false,
+  id: 'workflow',
+  navLabel: 'Workflow',
+  navPath: '/plugins/workflow',
+  requiredPermission: 'manage_users',
 };
 
 export default manifest;

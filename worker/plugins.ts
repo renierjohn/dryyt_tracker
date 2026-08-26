@@ -10,9 +10,12 @@ import type { AppBindings } from './types';
 import type { PluginManifest } from '../plugins/types';
 import helloManifest from '../plugins/hello/manifest';
 import helloRoutes from '../plugins/hello/backend/routes';
+import workflowManifest from '../plugins/workflow/manifest';
+import workflowRoutes from '../plugins/workflow/backend/routes';
 
 const registrations: { manifest: PluginManifest; router: Hono<AppBindings> }[] = [
   { manifest: helloManifest, router: helloRoutes },
+  { manifest: workflowManifest, router: workflowRoutes },
 ];
 
 export const pluginRouters: { path: string; router: Hono<AppBindings> }[] = registrations
