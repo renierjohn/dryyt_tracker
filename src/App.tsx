@@ -22,14 +22,7 @@ function App() {
     <>
       {user && masquerade && <MasqueradeBanner user={user} masquerade={masquerade} refresh={refresh} />}
       <Routes>
-        <Route
-          path="/"
-          element={
-            !user ? <Navigate to="/login" replace />
-            : hasManageUsers(user) ? <Home user={user} refresh={refresh} />
-            : <Navigate to="/dashboard" replace />
-          }
-        />
+        <Route path="/" element={<Home user={user} refresh={refresh} />} />
         <Route
           path="/login"
           element={user ? <Navigate to="/" replace /> : <Login onLoggedIn={refresh} />}
