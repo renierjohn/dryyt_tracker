@@ -31,3 +31,4 @@ dist-ssr
 
 # Localflare generated files
 .localflare/
+.worktrees/
