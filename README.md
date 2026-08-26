@@ -182,7 +182,9 @@ plugins/
 ```
 
 See `plugins/hello` for a working example (a page at `/plugins/hello` that pings
-`POST /api/plugins/hello/ping`, backed by its own `hello_plugin_visits` table).
+`POST /api/plugins/hello/ping`, backed by its own `hello_plugin_visits` table) —
+it ships with `enabled: false` in `plugins/hello/manifest.ts`; flip that to
+`true` (or remove the field) to try it live.
 
 Wiring, by layer:
 - **Frontend**: `src/plugins/loadPlugins.ts` uses `import.meta.glob` to

@@ -18,6 +18,8 @@ const STATUS_LABELS: Record<string, string> = {
   ready_to_pickup: 'Ready for pickup',
 };
 
+const normalizeCode = (s: string) => s.trim().toUpperCase();
+
 export default function Track() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [code, setCode] = useState(searchParams.get('code') ?? '');
@@ -45,7 +47,7 @@ export default function Track() {
     const initial = searchParams.get('code');
     if (initial) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      void lookup(initial);
+      void lookup(normalizeCode(initial));
     }
     // Only run on mount — the form's own submit handler drives later lookups.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -53,7 +55,7 @@ export default function Track() {
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const trimmed = code.trim().toUpperCase();
+    const trimmed = normalizeCode(code);
     if (!trimmed) return;
     setSearchParams({ code: trimmed });
     void lookup(trimmed);
@@ -85,7 +87,7 @@ export default function Track() {
           <p className="track__status">{STATUS_LABELS[transaction.status] ?? transaction.status}</p>
           <p>Customer: {transaction.customer_name}</p>
           {transaction.description && <p>{transaction.description}</p>}
-          <p className="track__updated">Last updated: {new Date(transaction.updated_at).toLocaleString()}</p>
+          <p className="track__updated">Last updated: {new Date(transaction.updated_at.replace(' ', 'T') + 'Z').toLocaleString()}</p>
         </div>
       )}
     </div>

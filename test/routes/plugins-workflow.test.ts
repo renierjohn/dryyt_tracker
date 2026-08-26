@@ -17,6 +17,12 @@ describe('workflow plugin admin gate', () => {
     expect((await req('GET', '/api/plugins/workflow/transactions', undefined, plainCookie)).status).toBe(403);
     expect((await req('POST', '/api/plugins/workflow/transactions', { customer_name: 'X' }, plainCookie)).status).toBe(403);
   });
+
+  it('returns 401 on transaction routes for a caller with no session at all', async () => {
+    expect((await req('GET', '/api/plugins/workflow/transactions')).status).toBe(401);
+    expect((await req('POST', '/api/plugins/workflow/transactions', { customer_name: 'X' })).status).toBe(401);
+    expect((await req('PUT', '/api/plugins/workflow/transactions/1/status', { status: 'done' })).status).toBe(401);
+  });
 });
 
 describe('POST /api/plugins/workflow/transactions', () => {
