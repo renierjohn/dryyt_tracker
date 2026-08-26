@@ -1,0 +1,81 @@
+.track {
+  max-width: 480px;
+  margin: 96px auto 0;
+  padding: 32px;
+  text-align: center;
+
+  &__form {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 14px;
+      color: var(--text);
+      text-align: left;
+    }
+
+    input {
+      font: inherit;
+      color: var(--text-h);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      text-transform: uppercase;
+
+      &:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 1px;
+      }
+    }
+
+    button {
+      font: inherit;
+      color: var(--text-h);
+      background: var(--accent-bg);
+      border: 1px solid var(--accent-border);
+      border-radius: 6px;
+      padding: 7px 16px;
+      cursor: pointer;
+      transition: border-color 0.2s;
+
+      &:hover {
+        border-color: var(--accent);
+      }
+
+      &:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 1px;
+      }
+    }
+  }
+
+  &__result {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-top: 16px;
+  }
+
+  &__status {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text-h);
+  }
+
+  &__updated {
+    color: var(--text);
+    font-size: 13px;
+  }
+
+  p[role='alert'] {
+    color: #dc2626;
+  }
+}

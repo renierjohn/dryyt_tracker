@@ -8,6 +8,7 @@ import ResetPassword from './pages/ResetPassword'
 import Home from './pages/Home'
 import Dashboard from './pages/Dashboard'
 import UserPage from './pages/UserPage'
+import Track from './pages/Track'
 import AdminConsole from './pages/AdminConsole'
 import MasqueradeBanner from './components/MasqueradeBanner'
 import { pluginRoutes } from './plugins/loadPlugins'
@@ -34,6 +35,7 @@ function App() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/users/:id" element={<UserPage />} />
+        <Route path="/track" element={<Track />} />
         <Route
           path="/dashboard"
           element={
