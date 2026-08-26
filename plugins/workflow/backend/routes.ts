@@ -9,6 +9,8 @@ import { generateCode } from './code';
 // single-purpose plugin routers (e.g. hello, alerts) do it.
 const workflowRoutes = new Hono<AppBindings>();
 
+const STATUSES = new Set(['hold', 'in_progress', 'done', 'ready_to_pickup']);
+
 export interface WorkflowTransaction {
   id: number;
   code: string;
@@ -72,6 +74,21 @@ workflowRoutes.get('/transactions', requirePermission('manage_users'), async (c)
     .prepare('SELECT * FROM workflow_transactions ORDER BY created_at DESC, id DESC')
     .all<WorkflowTransaction>();
   return c.json({ transactions: results });
+});
+
+workflowRoutes.put('/transactions/:id/status', requirePermission('manage_users'), async (c) => {
+  const id = Number(c.req.param('id'));
+  const body = await c.req.json().catch(() => null);
+  const status = typeof body?.status === 'string' ? body.status : '';
+
+  if (!STATUSES.has(status)) return c.json({ error: 'invalid_status' }, 400);
+
+  const row = await c.env.DB
+    .prepare(`UPDATE workflow_transactions SET status = ?, updated_at = datetime('now') WHERE id = ? RETURNING *`)
+    .bind(status, id)
+    .first<WorkflowTransaction>();
+  if (!row) return c.json({ error: 'not_found' }, 404);
+  return c.json({ transaction: row });
 });
 
 export default workflowRoutes;

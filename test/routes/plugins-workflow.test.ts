@@ -57,3 +57,36 @@ describe('GET /api/plugins/workflow/transactions', () => {
     expect(names.indexOf('Second')).toBeLessThan(names.indexOf('First'));
   });
 });
+
+describe('PUT /api/plugins/workflow/transactions/:id/status', () => {
+  it('updates the status of an existing transaction', async () => {
+    const adminRoleId = await getAdminRoleId();
+    const adminCookie = await createUserWithRoleAndLogin('workflow-status@example.com', adminRoleId, 'Admin');
+    const createRes = await req('POST', '/api/plugins/workflow/transactions', { customer_name: 'Status Target' }, adminCookie);
+    const created = (await createRes.json()) as { transaction: { id: number } };
+
+    const res = await req('PUT', `/api/plugins/workflow/transactions/${created.transaction.id}/status`, { status: 'in_progress' }, adminCookie);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { transaction: { status: string } };
+    expect(body.transaction.status).toBe('in_progress');
+  });
+
+  it('rejects an invalid status with 400', async () => {
+    const adminRoleId = await getAdminRoleId();
+    const adminCookie = await createUserWithRoleAndLogin('workflow-bad-status@example.com', adminRoleId, 'Admin');
+    const createRes = await req('POST', '/api/plugins/workflow/transactions', { customer_name: 'Bad Status Target' }, adminCookie);
+    const created = (await createRes.json()) as { transaction: { id: number } };
+
+    const res = await req('PUT', `/api/plugins/workflow/transactions/${created.transaction.id}/status`, { status: 'lost' }, adminCookie);
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe('invalid_status');
+  });
+
+  it('returns 404 for an unknown transaction id', async () => {
+    const adminRoleId = await getAdminRoleId();
+    const adminCookie = await createUserWithRoleAndLogin('workflow-missing-status@example.com', adminRoleId, 'Admin');
+    const res = await req('PUT', '/api/plugins/workflow/transactions/999999/status', { status: 'done' }, adminCookie);
+    expect(res.status).toBe(404);
+  });
+});
