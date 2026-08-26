@@ -4,4 +4,5 @@
 // should import types from ./types instead — that file has no runtime deps on
 // browser-only code like apiFetch.
 export * from './types';
+export * from './slots';
 export { apiFetch, ApiError } from '../src/lib/api';

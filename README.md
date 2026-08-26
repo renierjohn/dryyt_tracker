@@ -173,6 +173,7 @@ plugins/
                        # shows up in the "Plugins" nav on / and /dashboard
     frontend/
       routes.tsx       # exports PluginRoute[] ({ path, element, requiredPermission? })
+      slots.tsx        # optional — exports PluginSlotEntry[] ({ slot, component, requiredPermission? })
       pages/
     backend/
       routes.ts        # exports a Hono sub-router (same shape as worker/routes/*.ts)
@@ -221,6 +222,33 @@ Wiring, by layer:
 this one flag, so a plugin goes fully dark — nav link, page, and API all
 404/disappear — from a single edit. Default is enabled; omit the field entirely
 for that.
+
+**Slots — injecting into an existing page.** A plugin's `routes.tsx` only adds
+*new* pages at their own path; a **slot** lets a plugin add UI *inside* a page
+that's already part of the app. A host page declares an extension point:
+
+```tsx
+<PluginSlot name="dashboard.footer" user={user} />
+```
+
+and a plugin registers a component for that name in `frontend/slots.tsx`:
+
+```tsx
+const slots: PluginSlotEntry[] = [
+  { slot: 'dashboard.footer', component: DashboardFooterWidget },
+];
+export default slots;
+```
+
+`DashboardFooterWidget` receives `{ user }` as a prop (the same `AuthUser` the
+host page already has — no separate fetch needed). `src/plugins/loadPlugins.ts`
+auto-discovers every `plugins/*/frontend/slots.tsx` the same way it discovers
+`routes.tsx`, respecting `enabled` and each entry's own optional
+`requiredPermission`. See `plugins/hello/frontend/slots.tsx` for a working
+example rendered into `dashboard.footer` (declared in `src/pages/Dashboard.tsx`).
+Slot names are just strings — add `<PluginSlot name="..." user={user} />`
+anywhere in a core page to open a new extension point, and document the name
+you chose so plugin authors know it exists.
 
 ## Styling
 
