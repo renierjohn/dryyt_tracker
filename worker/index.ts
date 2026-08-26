@@ -6,6 +6,7 @@ import { avatarRoutes } from './routes/avatars';
 import { alertRoutes } from './routes/alerts';
 import { adminRoutes } from './routes/admin';
 import { publicRoutes } from './routes/public';
+import { pluginRouters } from './plugins';
 import type { AppBindings } from './types';
 
 const app = new Hono<AppBindings>();
@@ -17,6 +18,10 @@ app.route('/api/avatars', avatarRoutes);
 app.route('/api/alerts', alertRoutes);
 app.route('/api/admin', adminRoutes);
 app.route('/api', publicRoutes);
+
+for (const { path, router } of pluginRouters) {
+  app.route(path, router);
+}
 
 app.get('/api/health', (c) => c.json({ ok: true }));
 

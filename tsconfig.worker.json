@@ -11,5 +11,5 @@
     "composite": true,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.worker.tsbuildinfo"
   },
-  "include": ["worker/**/*.ts", "test/**/*.ts"]
+  "include": ["worker/**/*.ts", "test/**/*.ts", "plugins/*/backend/**/*.ts", "plugins/*/manifest.ts", "plugins/types.ts"]
 }

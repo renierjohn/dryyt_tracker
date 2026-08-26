@@ -157,6 +157,99 @@ otherwise, so it's inert against a real deploy even if a token leaked.
 Pass `--remote` to mint the token against the real D1 database instead (only
 do this deliberately, same caution as the migrations section below).
 
+## Plugins
+
+`plugins/<name>/` holds a self-contained feature with its own frontend, backend,
+and (optionally) migrations:
+
+```
+plugins/
+  sdk.ts              # frontend-facing barrel: re-exports types.ts + apiFetch/ApiError
+  types.ts            # PluginRoute/PluginManifest types only, no runtime deps — what
+                       # backend code (including manifest.ts) imports instead of sdk.ts
+  .migration-blocks.json  # generated — pinned per-plugin migration block numbers
+  <name>/
+    manifest.ts       # { id, navLabel, navPath, requiredPermission?, enabled? } —
+                       # shows up in the "Plugins" nav on / and /dashboard
+    frontend/
+      routes.tsx       # exports PluginRoute[] ({ path, element, requiredPermission? })
+      slots.tsx        # optional — exports PluginSlotEntry[] ({ slot, component, requiredPermission? })
+      pages/
+    backend/
+      routes.ts        # exports a Hono sub-router (same shape as worker/routes/*.ts)
+    migrations/
+      0001_*.sql
+```
+
+See `plugins/hello` for a working example (a page at `/plugins/hello` that pings
+`POST /api/plugins/hello/ping`, backed by its own `hello_plugin_visits` table).
+
+Wiring, by layer:
+- **Frontend**: `src/plugins/loadPlugins.ts` uses `import.meta.glob` to
+  auto-discover every `plugins/*/frontend/routes.tsx` and `plugins/*/manifest.ts`
+  — `App.tsx` renders the routes and `PluginNav` renders the manifests. Adding a
+  plugin needs zero edits to `App.tsx`.
+- **Backend**: Workers bundle statically, so there's no runtime discovery here —
+  `worker/plugins.ts` is the one place each plugin's router gets imported and
+  mounted (`app.route('/api/plugins/<id>', router)` in `worker/index.ts`). One
+  import + one array entry per plugin.
+- **Migrations**: `wrangler d1 migrations` needs one flat, sequentially-numbered
+  directory, so a plugin's own `migrations/*.sql` can't apply on its own. Run
+  `yarn plugins:sync` after adding/editing one — it copies every plugin's
+  migrations into the root `migrations/` folder, renumbered into a reserved
+  per-plugin block (`1000`-`1099`, `1100`-`1199`, ...) so they always sort after
+  the core app's (`0001`-`0999`) and never collide with each other. Block
+  assignments are pinned in `plugins/.migration-blocks.json` the first time a
+  plugin is seen and never reassigned — wrangler tracks "already applied" by
+  filename, so if a plugin's block ever shifted, an already-applied migration
+  would look unapplied again next time. The generated files in `migrations/` are
+  marked with a header comment and regenerated from scratch each run — edit the
+  plugin's source migration, not the copy.
+- Plugin frontend code should import shared types/helpers (`PluginRoute`,
+  `PluginManifest`, `apiFetch`, `ApiError`) from `plugins/sdk.ts` rather than
+  reaching into `src/lib/*` directly — it's the one seam between the plugin tree
+  and the app. Backend code (including `manifest.ts`, which the worker also
+  reads — see below) should import types from `plugins/types.ts` instead:
+  `sdk.ts` also re-exports `apiFetch` (real browser-`fetch`-backed code), which
+  must never end up in anything the worker's tsconfig or bundle touches.
+
+`requiredPermission` (on either a route or the manifest) gates it exactly like
+`/admin` gates on `manage_users` — omit it for "any authenticated user."
+
+**Enabling/disabling a plugin**: set `enabled: false` in its `manifest.ts`.
+`src/plugins/loadPlugins.ts` (frontend nav + routes) and `worker/plugins.ts`
+(backend router mount — it reads the same manifest before mounting) both check
+this one flag, so a plugin goes fully dark — nav link, page, and API all
+404/disappear — from a single edit. Default is enabled; omit the field entirely
+for that.
+
+**Slots — injecting into an existing page.** A plugin's `routes.tsx` only adds
+*new* pages at their own path; a **slot** lets a plugin add UI *inside* a page
+that's already part of the app. A host page declares an extension point:
+
+```tsx
+<PluginSlot name="dashboard.footer" user={user} />
+```
+
+and a plugin registers a component for that name in `frontend/slots.tsx`:
+
+```tsx
+const slots: PluginSlotEntry[] = [
+  { slot: 'dashboard.footer', component: DashboardFooterWidget },
+];
+export default slots;
+```
+
+`DashboardFooterWidget` receives `{ user }` as a prop (the same `AuthUser` the
+host page already has — no separate fetch needed). `src/plugins/loadPlugins.ts`
+auto-discovers every `plugins/*/frontend/slots.tsx` the same way it discovers
+`routes.tsx`, respecting `enabled` and each entry's own optional
+`requiredPermission`. See `plugins/hello/frontend/slots.tsx` for a working
+example rendered into `dashboard.footer` (declared in `src/pages/Dashboard.tsx`).
+Slot names are just strings — add `<PluginSlot name="..." user={user} />`
+anywhere in a core page to open a new extension point, and document the name
+you chose so plugin authors know it exists.
+
 ## Styling
 
 Styles live in `src/assets/sass` as `.scss`, one file per page/component

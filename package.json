@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:worker": "wrangler dev",
+    "plugins:sync": "node script/plugins/sync-migrations.js",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
