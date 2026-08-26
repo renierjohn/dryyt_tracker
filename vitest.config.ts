@@ -19,11 +19,12 @@ export default defineConfig(async () => {
     ],
     test: {
       setupFiles: ['./test/setup/apply-migrations.ts'],
-      // .claude/worktrees/** is git-ignored but not excluded from vitest's own
-      // file discovery, so any nested worktree's test/ directory gets picked
-      // up too, double-running (or worse) the whole suite. Exclude it
-      // explicitly alongside vitest's own defaults (node_modules, dist, etc).
-      exclude: [...configDefaults.exclude, '.claude/**'],
+      // .claude/worktrees/** and .worktrees/** are git-ignored but not excluded
+      // from vitest's own file discovery, so any nested worktree's test/
+      // directory gets picked up too, double-running (or worse) the whole
+      // suite. Exclude them explicitly alongside vitest's own defaults
+      // (node_modules, dist, etc).
+      exclude: [...configDefaults.exclude, '.claude/**', '.worktrees/**'],
     },
   };
 });
