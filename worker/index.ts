@@ -5,6 +5,7 @@ import { profileRoutes } from './routes/profile';
 import { avatarRoutes } from './routes/avatars';
 import { alertRoutes } from './routes/alerts';
 import { adminRoutes } from './routes/admin';
+import { adminAlertsRoutes } from './routes/admin-alerts';
 import { publicRoutes } from './routes/public';
 import { pluginRouters } from './plugins';
 import type { AppBindings } from './types';
@@ -16,6 +17,7 @@ app.route('/api/auth', authRoutes);
 app.route('/api/profile', profileRoutes);
 app.route('/api/avatars', avatarRoutes);
 app.route('/api/alerts', alertRoutes);
+app.route('/api/admin', adminAlertsRoutes);
 app.route('/api/admin', adminRoutes);
 app.route('/api', publicRoutes);
 

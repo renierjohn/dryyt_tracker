@@ -1,7 +1,7 @@
 import { Fragment } from 'react'
 import { Navigate, Routes, Route } from 'react-router-dom'
 import { useCurrentUser } from './lib/useCurrentUser'
-import { isSuperadmin, hasPermission } from './lib/permissions'
+import { isSuperadmin, canSendAlerts, hasPermission } from './lib/permissions'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
@@ -11,6 +11,7 @@ import Dashboard from './pages/Dashboard'
 import UserPage from './pages/UserPage'
 import Track from './pages/Track'
 import AdminConsole from './pages/AdminConsole'
+import AdminAlerts from './pages/AdminAlerts'
 import MasqueradeBanner from './components/MasqueradeBanner'
 import { pluginRoutes } from './plugins/loadPlugins'
 import './assets/sass/app.scss'
@@ -50,6 +51,14 @@ function App() {
           element={
             !user ? <Navigate to="/login" replace />
             : isSuperadmin(user) ? <AdminConsole user={user} refresh={refresh} />
+            : <Navigate to="/dashboard" replace />
+          }
+        />
+        <Route
+          path="/admin/alerts"
+          element={
+            !user ? <Navigate to="/login" replace />
+            : canSendAlerts(user) ? <AdminAlerts />
             : <Navigate to="/dashboard" replace />
           }
         />

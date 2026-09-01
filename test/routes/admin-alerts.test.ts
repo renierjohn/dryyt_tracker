@@ -29,7 +29,22 @@ describe('POST /api/admin/users/:id/alerts', () => {
     expect(targetAlerts.alerts.some((a) => a.id === body.alert.id)).toBe(true);
   });
 
-  it('returns 403 for a caller without the superadmin role', async () => {
+  it('lets the admin role inject an alert onto another user\'s page too', async () => {
+    const adminRoleId = await getAdminRoleId();
+    const adminCookie = await createUserWithRoleAndLogin('admin-role-inject@example.com', adminRoleId, 'Admin Role Inject');
+    const targetCookie = await createUserWithRoleAndLogin('inject-target3@example.com', 2, 'Target 3');
+    const targetMe = (await (await req('GET', '/api/auth/me', undefined, targetCookie)).json()) as { user: { id: number } };
+    const targetId = targetMe.user.id;
+
+    const res = await req('POST', `/api/admin/users/${targetId}/alerts`, {
+      type: 'info', visibility: 'public', body_html: '<p>x</p>',
+    }, adminCookie);
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { alert: { user_id: number } };
+    expect(body.alert.user_id).toBe(targetId);
+  });
+
+  it('returns 403 for a caller without the admin or superadmin role', async () => {
     const plainCookie = await createUserWithRoleAndLogin('plain-inject@example.com', 2, 'Plain');
     const targetCookie = await createUserWithRoleAndLogin('inject-target2@example.com', 2, 'Target 2');
     const targetMe = (await (await req('GET', '/api/auth/me', undefined, targetCookie)).json()) as { user: { id: number } };
@@ -37,18 +52,6 @@ describe('POST /api/admin/users/:id/alerts', () => {
     const res = await req('POST', `/api/admin/users/${targetMe.user.id}/alerts`, {
       type: 'info', visibility: 'public', body_html: '<p>x</p>',
     }, plainCookie);
-    expect(res.status).toBe(403);
-  });
-
-  it('returns 403 for the admin role (only superadmin may access the console)', async () => {
-    const adminRoleId = await getAdminRoleId();
-    const adminCookie = await createUserWithRoleAndLogin('admin-role-inject@example.com', adminRoleId, 'Admin Role Inject');
-    const targetCookie = await createUserWithRoleAndLogin('inject-target3@example.com', 2, 'Target 3');
-    const targetMe = (await (await req('GET', '/api/auth/me', undefined, targetCookie)).json()) as { user: { id: number } };
-
-    const res = await req('POST', `/api/admin/users/${targetMe.user.id}/alerts`, {
-      type: 'info', visibility: 'public', body_html: '<p>x</p>',
-    }, adminCookie);
     expect(res.status).toBe(403);
   });
 
