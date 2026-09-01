@@ -205,7 +205,7 @@ function AlertsPanel({ user }: { user: AuthUser }) {
       <ul className="dashboard__alert-list">
         {alerts.map((alert) => (
           <li key={alert.id} className="dashboard__alert-item">
-            {editingId === alert.id ? (
+            {canSendAlerts(user) && editingId === alert.id ? (
               <AlertEditor
                 initial={{ type: alert.type, visibility: alert.visibility, body_html: alert.body_html }}
                 submitLabel="Save"
@@ -216,7 +216,9 @@ function AlertsPanel({ user }: { user: AuthUser }) {
                 <span className="dashboard__alert-tag">[{alert.type}/{alert.visibility}]</span>
                 <div dangerouslySetInnerHTML={{ __html: alert.body_html }} />
                 <div className="dashboard__alert-actions">
-                  <button className="dashboard__button" onClick={() => setEditingId(alert.id)}>Edit</button>
+                  {canSendAlerts(user) && (
+                    <button className="dashboard__button" onClick={() => setEditingId(alert.id)}>Edit</button>
+                  )}
                   <button className="dashboard__button" onClick={() => handleDelete(alert.id)}>Delete</button>
                 </div>
               </>

@@ -83,4 +83,21 @@ describe('PUT/DELETE /api/alerts/:id ownership', () => {
     const res = await req('DELETE', '/api/alerts/999999', undefined, cookie);
     expect(res.status).toBe(404);
   });
+
+  it('forbids a plain user from editing their own alert, but still allows deleting it', async () => {
+    const superadminCookie = await createUserWithRoleAndLogin('alert-edit-admin@example.com', 1, 'Superadmin');
+    const plainCookie = await createUserWithRoleAndLogin('alert-edit-plain@example.com', 2, 'Plain');
+    const plainMe = (await (await req('GET', '/api/auth/me', undefined, plainCookie)).json()) as { user: { id: number } };
+
+    const createRes = await req('POST', `/api/admin/users/${plainMe.user.id}/alerts`, {
+      type: 'info', visibility: 'both', body_html: '<p>sent to plain user</p>',
+    }, superadminCookie);
+    const id = (await createRes.json() as { alert: { id: number } }).alert.id;
+
+    const putRes = await req('PUT', `/api/alerts/${id}`, { type: 'danger', visibility: 'public', body_html: '<p>edited</p>' }, plainCookie);
+    expect(putRes.status).toBe(403);
+
+    const deleteRes = await req('DELETE', `/api/alerts/${id}`, undefined, plainCookie);
+    expect(deleteRes.status).toBe(204);
+  });
 });

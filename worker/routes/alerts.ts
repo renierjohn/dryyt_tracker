@@ -45,7 +45,7 @@ alertRoutes.post('/', requireRole('admin', 'superadmin'), async (c) => {
   return c.json({ alert }, 201);
 });
 
-alertRoutes.put('/:id', async (c) => {
+alertRoutes.put('/:id', requireRole('admin', 'superadmin'), async (c) => {
   const user = c.get('user')!;
   const id = Number(c.req.param('id'));
   const alert = await getAlertById(c.env.DB, id);
