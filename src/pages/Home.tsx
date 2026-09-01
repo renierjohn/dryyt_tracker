@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { AuthUser } from '../lib/useCurrentUser';
-import { hasManageUsers } from '../lib/permissions';
+import { isSuperadmin } from '../lib/permissions';
 import LogoutButton from '../components/LogoutButton';
 import PluginNav from '../components/PluginNav';
 import '../assets/sass/home.scss';
@@ -46,8 +46,8 @@ export default function Home({ user, refresh }: { user: AuthUser | null; refresh
       {user ? (
         <>
           <p>
-            <Link to={hasManageUsers(user) ? '/admin' : '/dashboard'}>
-              Go to {hasManageUsers(user) ? 'admin console' : 'dashboard'}
+            <Link to={isSuperadmin(user) ? '/admin' : '/dashboard'}>
+              Go to {isSuperadmin(user) ? 'admin console' : 'dashboard'}
             </Link>
           </p>
           <PluginNav user={user} />

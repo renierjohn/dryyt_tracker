@@ -4,6 +4,9 @@ export function hasPermission(user: AuthUser, permission: string): boolean {
   return user.permissions.includes('*') || user.permissions.includes(permission);
 }
 
-export function hasManageUsers(user: AuthUser): boolean {
-  return hasPermission(user, 'manage_users');
+// The admin console is gated on role identity, not on the manage_users permission
+// (a role could be granted that permission for other purposes without becoming
+// entitled to the console).
+export function isSuperadmin(user: AuthUser): boolean {
+  return user.role_name === 'superadmin';
 }

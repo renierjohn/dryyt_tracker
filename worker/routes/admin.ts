@@ -2,14 +2,14 @@ import { Hono } from 'hono';
 import { sanitizeHtml } from '../sanitize';
 import { createAlert, getUserById, listUsersWithRoles, updateUserAdminFields, setUserActive, getUserByEmail, getRoleById, createUser, deleteSessionsForUser } from '../db';
 import type { DbAlert } from '../db';
-import { requirePermission, startMasquerade } from '../middleware/auth';
+import { requireRole, startMasquerade } from '../middleware/auth';
 import { hashPassword } from '../crypto';
 import { isValidEmail, toPublicUser } from '../util';
 import type { AppBindings } from '../types';
 
 export const adminRoutes = new Hono<AppBindings>();
 
-adminRoutes.use('*', requirePermission('manage_users'));
+adminRoutes.use('*', requireRole('superadmin'));
 
 const ALERT_TYPES = new Set(['info', 'success', 'warning', 'danger']);
 const ALERT_VISIBILITIES = new Set(['dashboard', 'public', 'both']);

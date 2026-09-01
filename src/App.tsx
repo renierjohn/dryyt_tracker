@@ -1,6 +1,6 @@
 import { Navigate, Routes, Route } from 'react-router-dom'
 import { useCurrentUser } from './lib/useCurrentUser'
-import { hasManageUsers, hasPermission } from './lib/permissions'
+import { isSuperadmin, hasPermission } from './lib/permissions'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
@@ -40,7 +40,7 @@ function App() {
           path="/dashboard"
           element={
             !user ? <Navigate to="/login" replace />
-            : hasManageUsers(user) ? <Navigate to="/admin" replace />
+            : isSuperadmin(user) ? <Navigate to="/admin" replace />
             : <Dashboard user={user} refresh={refresh} />
           }
         />
@@ -48,7 +48,7 @@ function App() {
           path="/admin"
           element={
             !user ? <Navigate to="/login" replace />
-            : hasManageUsers(user) ? <AdminConsole user={user} refresh={refresh} />
+            : isSuperadmin(user) ? <AdminConsole user={user} refresh={refresh} />
             : <Navigate to="/dashboard" replace />
           }
         />

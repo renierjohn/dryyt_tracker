@@ -95,3 +95,15 @@ export function requirePermission(permission: string) {
     return c.json({ error: 'forbidden' }, 403);
   };
 }
+
+// Unlike requirePermission, this checks the caller's role by name rather than their
+// granted permissions — a role can never gain access by being handed a permission
+// string, only by literally being renamed/reassigned to `roleName`.
+export function requireRole(roleName: string) {
+  return async (c: Context<AppBindings>, next: Next) => {
+    const user = c.get('user');
+    if (!user) return c.json({ error: 'unauthenticated' }, 401);
+    if (user.role_name === roleName) return next();
+    return c.json({ error: 'forbidden' }, 403);
+  };
+}

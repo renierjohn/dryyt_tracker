@@ -1,6 +1,6 @@
 import { SELF } from 'cloudflare:test';
 import { describe, it, expect } from 'vitest';
-import { createUserWithRoleAndLogin, getAdminRoleId, TEST_PASSWORD } from '../helpers';
+import { createUserWithRoleAndLogin, TEST_PASSWORD } from '../helpers';
 
 function post(path: string, body?: unknown, cookie?: string) {
   return SELF.fetch(`https://example.com${path}`, {
@@ -47,14 +47,13 @@ describe('POST /api/auth/login', () => {
   });
 
   it('rejects a deactivated user with 401 instead of logging them in (Finding 3)', async () => {
-    const adminRoleId = await getAdminRoleId();
-    const adminCookie = await createUserWithRoleAndLogin('login-deactivate-admin@example.com', adminRoleId, 'Admin');
+    const superadminCookie = await createUserWithRoleAndLogin('login-deactivate-admin@example.com', 1, 'Admin');
     const targetCookie = await createUserWithRoleAndLogin('login-deactivate-target@example.com', 2, 'Target');
 
     const targetMeRes = await SELF.fetch('https://example.com/api/auth/me', { headers: { Cookie: targetCookie } });
     const targetMe = (await targetMeRes.json()) as { user: { id: number } };
 
-    const deactivateRes = await post(`/api/admin/users/${targetMe.user.id}/deactivate`, undefined, adminCookie);
+    const deactivateRes = await post(`/api/admin/users/${targetMe.user.id}/deactivate`, undefined, superadminCookie);
     expect(deactivateRes.status).toBe(200);
 
     const loginRes = await post('/api/auth/login', { email: 'login-deactivate-target@example.com', password: TEST_PASSWORD });
