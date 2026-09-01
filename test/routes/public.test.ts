@@ -12,7 +12,7 @@ function req(method: string, path: string, body?: unknown, cookie?: string) {
 
 describe('GET /api/users/:id/public', () => {
   it('returns display name, avatar, and only public/both alerts, with no auth required', async () => {
-    const cookie = await createUserWithRoleAndLogin('public-page@example.com', 2, 'Public Page');
+    const cookie = await createUserWithRoleAndLogin('public-page@example.com', 1, 'Public Page');
     const me = (await (await req('GET', '/api/auth/me', undefined, cookie)).json()) as { user: { id: number } };
     const id = me.user.id;
 

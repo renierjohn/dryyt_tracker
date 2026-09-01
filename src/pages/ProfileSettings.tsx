@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { AuthUser } from '../lib/useCurrentUser';
 import { apiFetch, ApiError } from '../lib/api';
+import { canSendAlerts } from '../lib/permissions';
 import AlertEditor, { type AlertFormValues } from '../components/AlertEditor';
 import '../assets/sass/dashboard.scss';
 
@@ -17,7 +18,7 @@ export default function ProfileSettings({ user, refresh }: { user: AuthUser; ref
       <AvatarSection user={user} refresh={refresh} />
       <ProfileForm user={user} refresh={refresh} />
       <PasswordForm />
-      <AlertsPanel />
+      <AlertsPanel user={user} />
     </>
   );
 }
@@ -137,7 +138,7 @@ function PasswordForm() {
   );
 }
 
-function AlertsPanel() {
+function AlertsPanel({ user }: { user: AuthUser }) {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -194,8 +195,12 @@ function AlertsPanel() {
     <section className="dashboard__section">
       <h2>Alerts</h2>
       {error && <p role="alert">{error}</p>}
-      <h3>New alert</h3>
-      <AlertEditor submitLabel="Create alert" onSubmit={handleCreate} />
+      {canSendAlerts(user) && (
+        <>
+          <h3>New alert</h3>
+          <AlertEditor submitLabel="Create alert" onSubmit={handleCreate} />
+        </>
+      )}
       <h3>Your alerts</h3>
       <ul className="dashboard__alert-list">
         {alerts.map((alert) => (

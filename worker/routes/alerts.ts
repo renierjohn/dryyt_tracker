@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { sanitizeHtml } from '../sanitize';
 import { createAlert, getAlertsForUser, getAlertById, updateAlert, deleteAlert } from '../db';
 import type { DbAlert } from '../db';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, requireRole } from '../middleware/auth';
 import type { AppBindings, AuthUser } from '../types';
 
 export const alertRoutes = new Hono<AppBindings>();
@@ -23,7 +23,7 @@ alertRoutes.get('/', async (c) => {
   return c.json({ alerts });
 });
 
-alertRoutes.post('/', async (c) => {
+alertRoutes.post('/', requireRole('admin', 'superadmin'), async (c) => {
   const user = c.get('user')!;
   const body = await c.req.json().catch(() => null);
   const type = typeof body?.type === 'string' ? body.type : '';

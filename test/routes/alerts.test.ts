@@ -1,5 +1,6 @@
 import { SELF } from 'cloudflare:test';
 import { describe, it, expect } from 'vitest';
+import { createUserWithRoleAndLogin } from '../helpers';
 
 function req(method: string, path: string, body?: unknown, cookie?: string) {
   return SELF.fetch(`https://example.com${path}`, {
@@ -9,18 +10,9 @@ function req(method: string, path: string, body?: unknown, cookie?: string) {
   });
 }
 
-function extractCookie(res: Response): string {
-  return res.headers.get('set-cookie')!.split(';')[0];
-}
-
-async function registerAndLogin(email: string): Promise<string> {
-  const res = await req('POST', '/api/auth/register', { email, password: 'password123', display_name: 'Alert Tester' });
-  return extractCookie(res);
-}
-
 describe('POST /api/alerts', () => {
   it('creates an alert for the caller and sanitizes the body', async () => {
-    const cookie = await registerAndLogin('alert-create@example.com');
+    const cookie = await createUserWithRoleAndLogin('alert-create@example.com', 1, 'Alert Tester');
     const res = await req('POST', '/api/alerts', { type: 'info', visibility: 'public', body_html: '<p>hi</p><script>alert(1)</script>' }, cookie);
     expect(res.status).toBe(201);
     const body = await res.json() as { alert: { body_html: string } };
@@ -29,7 +21,7 @@ describe('POST /api/alerts', () => {
   });
 
   it('rejects an invalid type with 400', async () => {
-    const cookie = await registerAndLogin('alert-badtype@example.com');
+    const cookie = await createUserWithRoleAndLogin('alert-badtype@example.com', 1, 'Alert Tester');
     const res = await req('POST', '/api/alerts', { type: 'not-a-type', visibility: 'public', body_html: '<p>x</p>' }, cookie);
     expect(res.status).toBe(400);
   });
@@ -38,12 +30,18 @@ describe('POST /api/alerts', () => {
     const res = await req('POST', '/api/alerts', { type: 'info', visibility: 'public', body_html: '<p>x</p>' });
     expect(res.status).toBe(401);
   });
+
+  it('returns 403 for a plain user (only admin/superadmin may create alerts)', async () => {
+    const cookie = await createUserWithRoleAndLogin('alert-plain-create@example.com', 2, 'Plain');
+    const res = await req('POST', '/api/alerts', { type: 'info', visibility: 'public', body_html: '<p>x</p>' }, cookie);
+    expect(res.status).toBe(403);
+  });
 });
 
 describe('GET /api/alerts', () => {
   it('lists only the caller\'s own alerts', async () => {
-    const cookieA = await registerAndLogin('alert-list-a@example.com');
-    const cookieB = await registerAndLogin('alert-list-b@example.com');
+    const cookieA = await createUserWithRoleAndLogin('alert-list-a@example.com', 1, 'Alert Tester A');
+    const cookieB = await createUserWithRoleAndLogin('alert-list-b@example.com', 1, 'Alert Tester B');
     await req('POST', '/api/alerts', { type: 'info', visibility: 'public', body_html: '<p>a</p>' }, cookieA);
     await req('POST', '/api/alerts', { type: 'warning', visibility: 'public', body_html: '<p>b</p>' }, cookieB);
 
@@ -56,7 +54,7 @@ describe('GET /api/alerts', () => {
 
 describe('PUT/DELETE /api/alerts/:id ownership', () => {
   it('lets the owner edit and delete their own alert', async () => {
-    const cookie = await registerAndLogin('alert-owner@example.com');
+    const cookie = await createUserWithRoleAndLogin('alert-owner@example.com', 1, 'Alert Owner');
     const createRes = await req('POST', '/api/alerts', { type: 'info', visibility: 'public', body_html: '<p>old</p>' }, cookie);
     const id = (await createRes.json() as { alert: { id: number } }).alert.id;
 
@@ -68,8 +66,8 @@ describe('PUT/DELETE /api/alerts/:id ownership', () => {
   });
 
   it('forbids a different plain user from editing or deleting someone else\'s alert', async () => {
-    const ownerCookie = await registerAndLogin('alert-victim@example.com');
-    const attackerCookie = await registerAndLogin('alert-attacker@example.com');
+    const ownerCookie = await createUserWithRoleAndLogin('alert-victim@example.com', 1, 'Alert Victim');
+    const attackerCookie = await createUserWithRoleAndLogin('alert-attacker@example.com', 2, 'Alert Attacker');
     const createRes = await req('POST', '/api/alerts', { type: 'info', visibility: 'public', body_html: '<p>mine</p>' }, ownerCookie);
     const id = (await createRes.json() as { alert: { id: number } }).alert.id;
 
@@ -81,7 +79,7 @@ describe('PUT/DELETE /api/alerts/:id ownership', () => {
   });
 
   it('returns 404 for a nonexistent alert', async () => {
-    const cookie = await registerAndLogin('alert-404@example.com');
+    const cookie = await createUserWithRoleAndLogin('alert-404@example.com', 2, 'Plain');
     const res = await req('DELETE', '/api/alerts/999999', undefined, cookie);
     expect(res.status).toBe(404);
   });
