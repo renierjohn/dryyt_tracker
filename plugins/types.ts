@@ -11,6 +11,10 @@ export interface PluginRoute {
   // Omit for "any authenticated user"; App.tsx checks this the same way it checks
   // manage_users for /admin (via permissions.includes('*') || includes(requiredPermission)).
   requiredPermission?: string;
+  // An additional URL that renders the same element as `path` (not a redirect) —
+  // e.g. a short vanity path like /transactions for /plugins/workflow. Subject to
+  // the same requiredPermission gate as the canonical path.
+  alias?: string;
 }
 
 export interface PluginManifest {

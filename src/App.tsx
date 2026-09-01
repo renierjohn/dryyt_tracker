@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { Navigate, Routes, Route } from 'react-router-dom'
 import { useCurrentUser } from './lib/useCurrentUser'
 import { isSuperadmin, hasPermission } from './lib/permissions'
@@ -52,18 +53,19 @@ function App() {
             : <Navigate to="/dashboard" replace />
           }
         />
-        {pluginRoutes.map((route) => (
-          <Route
-            key={route.path}
-            path={route.path}
-            element={
-              !user ? <Navigate to="/login" replace />
-              : route.requiredPermission && !hasPermission(user, route.requiredPermission)
-                ? <Navigate to="/" replace />
-                : route.element
-            }
-          />
-        ))}
+        {pluginRoutes.map((route) => {
+          const element =
+            !user ? <Navigate to="/login" replace />
+            : route.requiredPermission && !hasPermission(user, route.requiredPermission)
+              ? <Navigate to="/" replace />
+              : route.element
+          return (
+            <Fragment key={route.path}>
+              <Route path={route.path} element={element} />
+              {route.alias && <Route path={route.alias} element={element} />}
+            </Fragment>
+          )
+        })}
       </Routes>
     </>
   )
