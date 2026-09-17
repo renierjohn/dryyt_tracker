@@ -23,7 +23,7 @@ alertRoutes.get('/', async (c) => {
   return c.json({ alerts });
 });
 
-alertRoutes.post('/', requireRole('admin', 'superadmin'), async (c) => {
+alertRoutes.post('/', requireRole('admin', 'owner', 'superadmin'), async (c) => {
   const user = c.get('user')!;
   const body = await c.req.json().catch(() => null);
   const type = typeof body?.type === 'string' ? body.type : '';
@@ -45,7 +45,7 @@ alertRoutes.post('/', requireRole('admin', 'superadmin'), async (c) => {
   return c.json({ alert }, 201);
 });
 
-alertRoutes.put('/:id', requireRole('admin', 'superadmin'), async (c) => {
+alertRoutes.put('/:id', requireRole('admin', 'owner', 'superadmin'), async (c) => {
   const user = c.get('user')!;
   const id = Number(c.req.param('id'));
   const alert = await getAlertById(c.env.DB, id);

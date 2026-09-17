@@ -14,5 +14,5 @@ export function isSuperadmin(user: AuthUser): boolean {
 // The alert-injection form is the one console feature the 'admin' role keeps
 // access to (via /api/admin/users/:id/alerts, gated the same way server-side).
 export function canSendAlerts(user: AuthUser): boolean {
-  return user.role_name === 'admin' || user.role_name === 'superadmin';
+  return user.role_name === 'admin' || user.role_name === 'owner' || user.role_name === 'superadmin';
 }

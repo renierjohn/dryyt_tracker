@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { getUserById, listUsersWithRoles, updateUserAdminFields, setUserActive, getUserByEmail, getRoleById, createUser, deleteSessionsForUser } from '../db';
+import { getUserById, listUsersWithRoles, updateUserAdminFields, setUserActive, getUserByEmail, getRoleById, listRoles, createUser, deleteSessionsForUser } from '../db';
 import { requireRole, startMasquerade } from '../middleware/auth';
 import { hashPassword } from '../crypto';
 import { isValidEmail, toPublicUser } from '../util';
@@ -23,6 +23,13 @@ adminRoutes.get('/users', async (c) => {
       created_at: u.created_at,
     })),
   });
+});
+
+// Superadmin (id 1) is excluded: it can never be assigned via the create/edit
+// forms (both reject role_id 1 with cannot_assign/change_superadmin_role).
+adminRoutes.get('/roles', async (c) => {
+  const roles = await listRoles(c.env.DB);
+  return c.json({ roles: roles.filter((r) => r.id !== 1).map((r) => ({ id: r.id, name: r.name })) });
 });
 
 adminRoutes.post('/users', async (c) => {

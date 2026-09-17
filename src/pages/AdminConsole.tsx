@@ -17,8 +17,14 @@ interface AdminUser {
   created_at: string;
 }
 
+interface Role {
+  id: number;
+  name: string;
+}
+
 export default function AdminConsole({ user, refresh }: { user: AuthUser; refresh: () => Promise<void> }) {
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [alertTargetId, setAlertTargetId] = useState<number | null>(null);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
@@ -27,6 +33,15 @@ export default function AdminConsole({ user, refresh }: { user: AuthUser; refres
     try {
       const body = await apiFetch<{ users: AdminUser[] }>('/admin/users');
       setUsers(body.users);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.code : 'unknown_error');
+    }
+  }
+
+  async function loadRoles() {
+    try {
+      const body = await apiFetch<{ roles: Role[] }>('/admin/roles');
+      setRoles(body.roles);
     } catch (err) {
       setError(err instanceof ApiError ? err.code : 'unknown_error');
     }
@@ -41,6 +56,8 @@ export default function AdminConsole({ user, refresh }: { user: AuthUser; refres
     // positive for this specific case.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadUsers();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadRoles();
   }, []);
 
   async function handleDeactivate(id: number) {
@@ -97,7 +114,7 @@ export default function AdminConsole({ user, refresh }: { user: AuthUser; refres
       <ProfileSettings user={user} refresh={refresh} />
       <h1>Admin console</h1>
       {error && <p className="admin-console__error" role="alert">{error}</p>}
-      <CreateUserForm onCreated={loadUsers} />
+      <CreateUserForm roles={roles} onCreated={loadUsers} />
       <table className="admin-console__table">
         <thead>
           <tr>
@@ -147,14 +164,14 @@ export default function AdminConsole({ user, refresh }: { user: AuthUser; refres
       {editingUser !== null && (
         <div className="admin-console__panel">
           <h2>Edit user {editingUser.email}</h2>
-          <EditUserForm user={editingUser} onSubmit={handleUpdateUser} onCancel={() => setEditingUser(null)} />
+          <EditUserForm user={editingUser} roles={roles} onSubmit={handleUpdateUser} onCancel={() => setEditingUser(null)} />
         </div>
       )}
     </div>
   );
 }
 
-function CreateUserForm({ onCreated }: { onCreated: () => Promise<void> }) {
+function CreateUserForm({ roles, onCreated }: { roles: Role[]; onCreated: () => Promise<void> }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -195,8 +212,12 @@ function CreateUserForm({ onCreated }: { onCreated: () => Promise<void> }) {
         <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
       </label>
       <label>
-        Role ID
-        <input type="number" value={roleId} onChange={(e) => setRoleId(Number(e.target.value))} required />
+        Role
+        <select value={roleId} onChange={(e) => setRoleId(Number(e.target.value))} required>
+          {roles.map((r) => (
+            <option key={r.id} value={r.id}>{r.name}</option>
+          ))}
+        </select>
       </label>
       <button type="submit">Create</button>
     </form>
@@ -205,10 +226,12 @@ function CreateUserForm({ onCreated }: { onCreated: () => Promise<void> }) {
 
 function EditUserForm({
   user,
+  roles,
   onSubmit,
   onCancel,
 }: {
   user: AdminUser;
+  roles: Role[];
   onSubmit: (values: { email: string; display_name: string; role_id?: number }) => Promise<void>;
   onCancel: () => void;
 }) {
@@ -243,14 +266,18 @@ function EditUserForm({
         <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
       </label>
       <label>
-        Role ID
-        <input
-          type="number"
+        Role
+        <select
           value={roleId}
           onChange={(e) => setRoleId(Number(e.target.value))}
           required
           disabled={isSuperadmin}
-        />
+        >
+          {isSuperadmin && <option value={user.role_id}>{user.role_name}</option>}
+          {roles.map((r) => (
+            <option key={r.id} value={r.id}>{r.name}</option>
+          ))}
+        </select>
       </label>
       <button type="submit">Save</button>
       <button type="button" onClick={onCancel}>Cancel</button>

@@ -77,16 +77,19 @@ workflowRoutes.post('/transactions', requirePermission('manage_users'), async (c
 });
 
 workflowRoutes.get('/transactions', requirePermission('manage_users'), async (c) => {
+  const user = c.get('user')!;
   const { results } = await c.env.DB
     // Secondary sort by id: created_at has only second resolution, so two
     // transactions registered within the same second would otherwise tie and
     // fall back to an unspecified (in practice insertion/ascending) order.
-    .prepare('SELECT * FROM workflow_transactions ORDER BY created_at DESC, id DESC')
+    .prepare('SELECT * FROM workflow_transactions WHERE created_by = ? ORDER BY created_at DESC, id DESC')
+    .bind(user.id)
     .all<WorkflowTransaction>();
   return c.json({ transactions: results });
 });
 
 workflowRoutes.put('/transactions/:id/status', requirePermission('manage_users'), async (c) => {
+  const user = c.get('user')!;
   const id = Number(c.req.param('id'));
   const body = await c.req.json().catch(() => null);
   const status = typeof body?.status === 'string' ? body.status : '';
@@ -94,8 +97,11 @@ workflowRoutes.put('/transactions/:id/status', requirePermission('manage_users')
   if (!STATUSES.has(status)) return c.json({ error: 'invalid_status' }, 400);
 
   const row = await c.env.DB
-    .prepare(`UPDATE workflow_transactions SET status = ?, updated_at = datetime('now') WHERE id = ? RETURNING *`)
-    .bind(status, id)
+    .prepare(
+      `UPDATE workflow_transactions SET status = ?, updated_at = datetime('now')
+       WHERE id = ? AND created_by = ? RETURNING *`,
+    )
+    .bind(status, id, user.id)
     .first<WorkflowTransaction>();
   if (!row) return c.json({ error: 'not_found' }, 404);
   return c.json({ transaction: row });

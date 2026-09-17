@@ -10,7 +10,7 @@ import type { AppBindings } from '../types';
 // deactivate/masquerade, all still superadmin-only).
 export const adminAlertsRoutes = new Hono<AppBindings>();
 
-adminAlertsRoutes.use('*', requireRole('admin', 'superadmin'));
+adminAlertsRoutes.use('*', requireRole('admin', 'owner', 'superadmin'));
 
 const ALERT_TYPES = new Set(['info', 'success', 'warning', 'danger']);
 const ALERT_VISIBILITIES = new Set(['dashboard', 'public', 'both']);

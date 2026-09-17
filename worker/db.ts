@@ -88,6 +88,11 @@ export async function getRoleById(db: D1Database, id: number): Promise<DbRole | 
   return row ?? null;
 }
 
+export async function listRoles(db: D1Database): Promise<DbRole[]> {
+  const { results } = await db.prepare('SELECT * FROM roles ORDER BY id').all<DbRole>();
+  return results;
+}
+
 export async function createSession(
   db: D1Database,
   token: string,
