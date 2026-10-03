@@ -57,6 +57,13 @@ export default function Home({ user, refresh }: { user: AuthUser | null; refresh
       </form>
 
       <OwnersList />
+
+      <footer className="home__footer">
+        <p>Copyright 2026</p>
+        <p>
+          Created by <a href="mailto:renify.official@gmail.com">renify.official@gmail.com</a>
+        </p>
+      </footer>
     </AppShell>
   );
 }

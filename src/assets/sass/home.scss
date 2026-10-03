@@ -17,12 +17,10 @@
 
   // Doubled class so this beats .m3-shell__content regardless of CSS order.
   &__content.m3-shell__content {
-    // Expanded: track card and owners side by side, centered.
+    // Expanded: one centered column — track card, then the stores grid below.
     @media (min-width: 1200px) {
       display: grid;
-      grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
-      grid-template-rows: auto 1fr;
-      column-gap: 24px;
+      grid-template-columns: minmax(0, 1fr);
       align-content: start;
       align-items: start;
       width: 100%;
@@ -156,6 +154,26 @@
     }
   }
 
+  &__footer {
+    grid-column: 1 / -1;
+    margin-top: 32px;
+    padding: 16px 4px 8px;
+    font-size: 12px;
+    line-height: 18px;
+    text-align: center;
+    color: var(--m3-on-surface-variant);
+    border-top: 1px solid color-mix(in srgb, var(--m3-outline) 40%, transparent);
+
+    p {
+      margin: 0;
+    }
+
+    a {
+      color: inherit;
+      font-weight: 500;
+    }
+  }
+
   &__supporting {
     margin: 6px 16px 0;
     font-size: 12px;
@@ -164,10 +182,6 @@
 
   &__owners {
     margin-top: 28px;
-
-    @media (min-width: 1200px) {
-      margin-top: 0;
-    }
   }
 
   &__section-title {
@@ -192,10 +206,11 @@
       border-top: 1px solid var(--border);
     }
 
-    // Medium and up: a grid of cards instead of one grouped list.
+    // Medium and up: a grid of cards instead of one grouped list — two columns
+    // on tablet, three on desktop.
     @media (min-width: 600px) {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 12px;
       overflow: visible;
       background: none;
@@ -210,6 +225,10 @@
         border-radius: 16px;
         background: var(--m3-surface-container);
       }
+    }
+
+    @media (min-width: 1200px) {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
     }
   }
 
@@ -234,6 +253,38 @@
     &:focus-visible {
       outline: 2px solid var(--m3-primary);
       outline-offset: -2px;
+    }
+
+    // Grid cards are too narrow for a row: stack avatar, text and Visit, with
+    // the button pinned to the bottom so cards in a row line up.
+    @media (min-width: 600px) {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 12px;
+      height: 100%;
+      box-sizing: border-box;
+      padding: 0 0 16px;
+
+      // The owner's photo (or initial) fills the card's width as a square, so
+      // it takes at least two-thirds of the card's height.
+      .home__avatar {
+        width: 100%;
+        height: auto;
+        aspect-ratio: 1;
+        border-radius: 0;
+        font-size: 64px;
+      }
+
+      .home__owner-text {
+        flex: 1 1 auto;
+        width: 100%;
+        padding: 0 16px;
+        box-sizing: border-box;
+      }
+
+      .home__owner-visit {
+        margin: 0 16px;
+      }
     }
   }
 

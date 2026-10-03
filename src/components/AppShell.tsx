@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import type { AuthUser } from '../lib/useCurrentUser';
 import { isSuperadmin, canSendAlerts, isOwner, isCustomer } from '../lib/permissions';
 import LogoutButton from './LogoutButton';
+import { getMyTrackCode } from '../lib/myTrack';
 import '../assets/sass/m3.scss';
 
 // Material 3 app shell, adapting by window size: phones get a top app bar +
@@ -26,6 +27,8 @@ const ICONS = {
     'M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z',
   tracker:
     'M19 3h-4.18C14.4 1.84 13.3 1 12 1s-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm-2 14-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z',
+  mytrack:
+    'M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z',
   arrow: 'M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z',
   camera:
     'M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4zM9 2 7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z',
@@ -34,7 +37,7 @@ const ICONS = {
 } as const;
 
 type IconName = keyof typeof ICONS;
-type NavKey = 'home' | 'dashboard' | 'tracker' | 'alerts' | 'register' | 'login';
+type NavKey = 'home' | 'dashboard' | 'tracker' | 'track' | 'alerts' | 'register' | 'login';
 
 function initials(name: string) {
   return name
@@ -89,6 +92,8 @@ export default function AppShell({
   children: ReactNode;
 }) {
   const admin = user ? isSuperadmin(user) : false;
+  // Read on every render, so it shows up as soon as /track stores a code.
+  const myTrackCode = getMyTrackCode();
 
   return (
     <div className="m3-shell">
@@ -108,6 +113,15 @@ export default function AppShell({
 
       <nav className="m3-nav">
         <NavLink to="/" icon="home" label="Home" active={active} />
+        {myTrackCode && (
+          <Link
+            className="m3-nav__item"
+            to={`/track?code=${encodeURIComponent(myTrackCode)}`}
+            aria-current={active === 'track' ? 'page' : undefined}
+          >
+            <NavItem icon="mytrack" label="My Track" active={active === 'track'} />
+          </Link>
+        )}
         {user && (
           <Link
             className="m3-nav__item"

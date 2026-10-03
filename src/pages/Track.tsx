@@ -7,6 +7,7 @@ import '../assets/sass/home.scss';
 import RichText from '../components/RichText';
 import QrCode from '../components/QrCode';
 import { useColorbox } from '../lib/useColorbox';
+import { setMyTrackCode } from '../lib/myTrack';
 import '../assets/sass/track.scss';
 
 interface TrackedTransaction {
@@ -51,6 +52,7 @@ export default function Track() {
       const body = await apiFetch<{ transaction: TrackedTransaction }>(
         `/plugins/workflow/track/${encodeURIComponent(lookupCode)}`,
       );
+      setMyTrackCode(body.transaction.code);
       setTransaction(body.transaction);
     } catch (err) {
       setError(err instanceof ApiError && err.status === 404 ? 'not_found' : 'unknown_error');
@@ -81,7 +83,7 @@ export default function Track() {
   useColorbox(photosRef, transaction?.image_ids.join(','));
 
   return (
-    <AppShell active="home" user={user} refresh={refresh} contentClassName="m3-page track">
+    <AppShell active="track" user={user} refresh={refresh} contentClassName="m3-page track">
       <h1 className="m3-headline">Code Result</h1>
 
       <section>
