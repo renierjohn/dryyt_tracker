@@ -409,3 +409,38 @@ describe('GET /api/plugins/workflow/transactions by status', () => {
     expect((await req('GET', '/api/plugins/workflow/transactions?status=bogus', undefined, adminCookie)).status).toBe(400);
   });
 });
+
+describe('POST /api/plugins/workflow/pickup', () => {
+  async function setup(email: string) {
+    const ownerCookie = await createUserWithRoleAndLogin(email, await getOwnerRoleId(), 'Owner');
+    const createRes = await req('POST', '/api/plugins/workflow/transactions', { customer_name: 'Pickup Target' }, ownerCookie);
+    const { transaction } = (await createRes.json()) as { transaction: { id: number; code: string } };
+    return { ownerCookie, transaction };
+  }
+
+  it("ends the owner's ready_to_pickup transaction matching the scanned code", async () => {
+    const { ownerCookie, transaction } = await setup('workflow-pickup@example.com');
+    await req('PUT', `/api/plugins/workflow/transactions/${transaction.id}/status`, { status: 'ready_to_pickup' }, ownerCookie);
+
+    const res = await req('POST', '/api/plugins/workflow/pickup', { code: transaction.code.toLowerCase() }, ownerCookie);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { transaction: { status: string; done_at: string | null } };
+    expect(body.transaction.status).toBe('end');
+    expect(body.transaction.done_at).not.toBeNull();
+  });
+
+  it('rejects a transaction that is not ready for pickup with 409', async () => {
+    const { ownerCookie, transaction } = await setup('workflow-pickup-notready@example.com');
+    const res = await req('POST', '/api/plugins/workflow/pickup', { code: transaction.code }, ownerCookie);
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: string }).error).toBe('not_ready_for_pickup');
+  });
+
+  it("returns 404 for another owner's code", async () => {
+    const { ownerCookie, transaction } = await setup('workflow-pickup-a@example.com');
+    await req('PUT', `/api/plugins/workflow/transactions/${transaction.id}/status`, { status: 'ready_to_pickup' }, ownerCookie);
+    const otherCookie = await createUserWithRoleAndLogin('workflow-pickup-b@example.com', await getOwnerRoleId(), 'Other');
+    const res = await req('POST', '/api/plugins/workflow/pickup', { code: transaction.code }, otherCookie);
+    expect(res.status).toBe(404);
+  });
+});

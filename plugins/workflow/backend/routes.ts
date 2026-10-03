@@ -527,4 +527,32 @@ workflowRoutes.put('/transactions/:id/status', requirePermission('manage_users')
   return c.json({ transaction: row });
 });
 
+// Pickup by scanned code: the owner scans the QR on the customer's /track page,
+// and only one of their own transactions that's 'ready_to_pickup' moves to 'end'.
+workflowRoutes.post('/pickup', requirePermission('manage_users'), async (c) => {
+  const user = c.get('user')!;
+  const body = await c.req.json().catch(() => null);
+  const code = typeof body?.code === 'string' ? body.code.trim().toUpperCase() : '';
+  if (!code) return c.json({ error: 'missing_code' }, 400);
+
+  const row = await c.env.DB
+    .prepare(
+      `UPDATE workflow_transactions SET
+         status = 'end',
+         updated_at = datetime('now'),
+         done_at = COALESCE(done_at, datetime('now'))
+       WHERE code = ?1 AND created_by = ?2 AND status = 'ready_to_pickup' RETURNING *`,
+    )
+    .bind(code, user.id)
+    .first<WorkflowTransaction>();
+  if (row) return c.json({ transaction: row });
+
+  const existing = await c.env.DB
+    .prepare('SELECT status FROM workflow_transactions WHERE code = ? AND created_by = ?')
+    .bind(code, user.id)
+    .first<{ status: string }>();
+  if (!existing) return c.json({ error: 'not_found' }, 404);
+  return c.json({ error: 'not_ready_for_pickup', status: existing.status }, 409);
+});
+
 export default workflowRoutes;

@@ -45,7 +45,7 @@ const ICONS = {
 } as const;
 
 export type IconName = keyof typeof ICONS;
-type NavKey = 'home' | 'dashboard' | 'tracker' | 'track' | 'alerts' | 'register' | 'login';
+type NavKey = 'home' | 'dashboard' | 'tracker' | 'track' | 'scan' | 'alerts' | 'register' | 'login';
 
 function initials(name: string) {
   return name
@@ -100,8 +100,10 @@ export default function AppShell({
   children: ReactNode;
 }) {
   const admin = user ? isSuperadmin(user) : false;
+  const owner = user ? isOwner(user) : false;
   // Read on every render, so it shows up as soon as /track stores a code.
-  const myTrackCode = getMyTrackCode();
+  // Owners get the pickup scanner in its place.
+  const myTrackCode = owner ? null : getMyTrackCode();
 
   return (
     <div className="m3-shell">
@@ -130,6 +132,11 @@ export default function AppShell({
             <NavItem icon="mytrack" label="My Track" active={active === 'track'} />
           </Link>
         )}
+        {owner && (
+          <Link className="m3-nav__item" to="/plugins/workflow/scan" aria-current={active === 'scan' ? 'page' : undefined}>
+            <NavItem icon="scan" label="Scan" active={active === 'scan'} />
+          </Link>
+        )}
         {user && (
           <Link
             className="m3-nav__item"
@@ -143,7 +150,7 @@ export default function AppShell({
             />
           </Link>
         )}
-        {user && (isOwner(user) || isCustomer(user)) && (
+        {user && (owner || isCustomer(user)) && (
           <Link className="m3-nav__item" to="/plugins/workflow" aria-current={active === 'tracker' ? 'page' : undefined}>
             <NavItem icon="tracker" label="Tracker" active={active === 'tracker'} />
           </Link>
