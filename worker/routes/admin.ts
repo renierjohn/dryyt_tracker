@@ -1,17 +1,31 @@
 import { Hono } from 'hono';
-import { getUserById, listUsersWithRoles, updateUserAdminFields, setUserActive, getUserByEmail, getRoleById, listRoles, createUser, deleteSessionsForUser } from '../db';
+import { getUserById, searchUsersWithRoles, userStats, updateUserAdminFields, setUserActive, getUserByEmail, getRoleById, listRoles, createUser, deleteSessionsForUser } from '../db';
 import { requireRole, startMasquerade } from '../middleware/auth';
 import { hashPassword } from '../crypto';
 import { isValidEmail, toPublicUser } from '../util';
 import type { AppBindings } from '../types';
+import { likePattern, parsePage, PAGE_SIZE } from '../pagination';
 
 export const adminRoutes = new Hono<AppBindings>();
 
 adminRoutes.use('*', requireRole('superadmin'));
 
+// Paginated: ?page=, ?q= (name/email), ?role= (role name), ?status=active|inactive.
 adminRoutes.get('/users', async (c) => {
-  const users = await listUsersWithRoles(c.env.DB);
+  const { page, limit, offset } = parsePage(c.req.query('page'));
+  const q = c.req.query('q')?.trim() ?? '';
+  const role = c.req.query('role') || null;
+  const status = c.req.query('status');
+  const active = status === 'active' ? true : status === 'inactive' ? false : null;
+  const [{ users, total }, stats] = await Promise.all([
+    searchUsersWithRoles(c.env.DB, { q: q ? likePattern(q) : '', role, active, limit, offset }),
+    userStats(c.env.DB),
+  ]);
   return c.json({
+    page,
+    page_size: PAGE_SIZE,
+    total,
+    stats,
     users: users.map((u) => ({
       id: u.id,
       email: u.email,

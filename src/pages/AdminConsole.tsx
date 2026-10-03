@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { apiFetch, ApiError } from '../lib/api';
 import AlertEditor, { type AlertFormValues } from '../components/AlertEditor';
 import AppShell from '../components/AppShell';
+import RichText from '../components/RichText';
 import type { AuthUser } from '../lib/useCurrentUser';
 import ProfileSettings from './ProfileSettings';
 import '../assets/sass/dashboard.scss';
@@ -23,7 +24,43 @@ interface Role {
   name: string;
 }
 
-type AdminTab = 'users' | 'profile';
+type AdminTab = 'users' | 'transactions' | 'profile';
+
+const TAB_LABELS: Record<AdminTab, string> = { users: 'Users', transactions: 'Transactions', profile: 'Profile' };
+
+interface AdminTransaction {
+  id: number;
+  code: string;
+  status: string;
+  customer_name: string;
+  created_at: string;
+  owner_name: string;
+  user_id: number | null;
+  user_name: string | null;
+  user_email: string | null;
+}
+
+interface PurgeResult {
+  cutoff: string;
+  transactions: number;
+  images: number;
+}
+
+interface AdminTransactionDetail extends AdminTransaction {
+  customer_contact: string | null;
+  description: string | null;
+  updated_at: string;
+  done_at: string | null;
+  owner_email: string;
+  image_ids: number[];
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  hold: 'On hold',
+  in_progress: 'In progress',
+  done: 'Done',
+  ready_to_pickup: 'Ready for pickup',
+};
 type StatusFilter = 'all' | 'active' | 'inactive';
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -52,13 +89,16 @@ function initials(name: string) {
 }
 
 // SQLite datetime('now') values are UTC without a zone.
+function formatDateTime(value: string) {
+  return new Date(value.replace(' ', 'T') + 'Z').toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+}
+
 function formatDate(value: string) {
   return new Date(value.replace(' ', 'T') + 'Z').toLocaleDateString([], { dateStyle: 'medium' });
 }
 
 export default function AdminConsole({ user, refresh }: { user: AuthUser; refresh: () => Promise<void> }) {
   const [tab, setTab] = useState<AdminTab>('users');
-  const [users, setUsers] = useState<AdminUser[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -68,14 +108,14 @@ export default function AdminConsole({ user, refresh }: { user: AuthUser; refres
   const [alertTarget, setAlertTarget] = useState<AdminUser | null>(null);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
 
-  async function loadUsers() {
-    try {
-      const body = await apiFetch<{ users: AdminUser[] }>('/admin/users');
-      setUsers(body.users);
-    } catch (err) {
-      setError(errorMessage(err));
-    }
-  }
+  const debouncedQuery = useDebounced(query.trim(), 300);
+  const userList = usePagedList<UsersResponse>('/admin/users', {
+    q: debouncedQuery,
+    role: roleFilter === 'all' ? '' : roleFilter,
+    status: statusFilter === 'all' ? '' : statusFilter,
+  });
+  const users = userList.body?.users ?? [];
+  const loadUsers = userList.reload;
 
   async function loadRoles() {
     try {
@@ -87,9 +127,8 @@ export default function AdminConsole({ user, refresh }: { user: AuthUser; refres
   }
 
   useEffect(() => {
-    // Both loaders only set state after their awaited fetch resolves.
+    // Only sets state after its awaited fetch resolves.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadUsers();
     void loadRoles();
   }, []);
 
@@ -100,7 +139,7 @@ export default function AdminConsole({ user, refresh }: { user: AuthUser; refres
     try {
       await action();
       setNotice(success);
-      await loadUsers();
+      loadUsers();
     } catch (err) {
       setError(errorMessage(err));
     }
@@ -125,25 +164,8 @@ export default function AdminConsole({ user, refresh }: { user: AuthUser; refres
     }
   }
 
-  const roleNames = useMemo(() => [...new Set(users.map((u) => u.role_name))].sort(), [users]);
-  const stats = useMemo(
-    () => ({
-      total: users.length,
-      active: users.filter((u) => u.is_active).length,
-      owners: users.filter((u) => u.role_name === 'owner').length,
-      customers: users.filter((u) => u.role_name === 'user').length,
-    }),
-    [users],
-  );
-  const visibleUsers = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return users.filter(
-      (u) =>
-        (roleFilter === 'all' || u.role_name === roleFilter) &&
-        (statusFilter === 'all' || (statusFilter === 'active') === Boolean(u.is_active)) &&
-        (!q || u.display_name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)),
-    );
-  }, [users, query, roleFilter, statusFilter]);
+  const stats = userList.body?.stats;
+  const roleNames = stats?.role_names ?? [];
 
   return (
     <AppShell active="dashboard" user={user} refresh={refresh} contentClassName="dashboard dashboard__content admin">
@@ -151,7 +173,7 @@ export default function AdminConsole({ user, refresh }: { user: AuthUser; refres
 
       <div className="dashboard__main">
         <div className="dashboard__tabs" role="tablist">
-          {(['users', 'profile'] as const).map((key) => (
+          {(Object.keys(TAB_LABELS) as AdminTab[]).map((key) => (
             <button
               key={key}
               type="button"
@@ -160,23 +182,26 @@ export default function AdminConsole({ user, refresh }: { user: AuthUser; refres
               className={`dashboard__tab${tab === key ? ' dashboard__tab--active' : ''}`}
               onClick={() => setTab(key)}
             >
-              {key === 'users' ? 'Users' : 'Profile'}
+              {TAB_LABELS[key]}
             </button>
           ))}
         </div>
 
         {tab === 'profile' && <ProfileSettings user={user} refresh={refresh} />}
+        {tab === 'transactions' && <TransactionsPanel />}
 
         {tab === 'users' && (
           <>
-            {error && <p className="m3-banner m3-banner--error" role="alert">{error}</p>}
+            {(error ?? userList.error) && (
+              <p className="m3-banner m3-banner--error" role="alert">{error ?? userList.error}</p>
+            )}
             {notice && <p className="m3-banner" role="status">{notice}</p>}
 
             <ul className="admin__stats" aria-label="User totals">
-              <Stat label="Users" value={stats.total} />
-              <Stat label="Active" value={stats.active} />
-              <Stat label="Owners" value={stats.owners} />
-              <Stat label="Customers" value={stats.customers} />
+              <Stat label="Users" value={stats?.total} />
+              <Stat label="Active" value={stats?.active} />
+              <Stat label="Owners" value={stats?.owners} />
+              <Stat label="Customers" value={stats?.customers} />
             </ul>
 
             <details className="m3-card m3-collapsible">
@@ -185,7 +210,7 @@ export default function AdminConsole({ user, refresh }: { user: AuthUser; refres
                 roles={roles}
                 onCreated={async (name) => {
                   setNotice(`${name} created.`);
-                  await loadUsers();
+                  loadUsers();
                 }}
               />
             </details>
@@ -224,7 +249,9 @@ export default function AdminConsole({ user, refresh }: { user: AuthUser; refres
                 </select>
               </div>
 
-              {visibleUsers.length === 0 ? (
+              {!userList.body ? (
+                <p className="m3-supporting admin__empty">Loading…</p>
+              ) : users.length === 0 ? (
                 <p className="m3-supporting admin__empty">No users match.</p>
               ) : (
                 <div className="m3-table-wrap">
@@ -239,7 +266,7 @@ export default function AdminConsole({ user, refresh }: { user: AuthUser; refres
                       </tr>
                     </thead>
                     <tbody>
-                      {visibleUsers.map((u) => (
+                      {users.map((u) => (
                         <tr key={u.id} className={u.is_active ? undefined : 'admin__row--inactive'}>
                           <td>
                             <div className="admin__user">
@@ -302,6 +329,7 @@ export default function AdminConsole({ user, refresh }: { user: AuthUser; refres
                   </table>
                 </div>
               )}
+              <Pagination {...userList} label="Users pages" />
             </div>
           </>
         )}
@@ -317,7 +345,7 @@ export default function AdminConsole({ user, refresh }: { user: AuthUser; refres
               await apiFetch(`/admin/users/${editingUser.id}`, { method: 'PUT', body: JSON.stringify(values) });
               setEditingUser(null);
               setNotice(`${values.display_name} updated.`);
-              await loadUsers();
+              loadUsers();
             }}
           />
         </Dialog>
@@ -342,10 +370,366 @@ export default function AdminConsole({ user, refresh }: { user: AuthUser; refres
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+// All transactions across owners, from the workflow plugin's superadmin endpoint.
+function TransactionsPanel() {
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [openId, setOpenId] = useState<number | null>(null);
+  const [purging, setPurging] = useState(false);
+  const [purgeError, setPurgeError] = useState<string | null>(null);
+  const [purgeNotice, setPurgeNotice] = useState<string | null>(null);
+  // How many transactions are past the 3-month mark (a dry-run count), shown
+  // as a warning until they're deleted.
+  const [stale, setStale] = useState<PurgeResult | null>(null);
+  const [staleTick, setStaleTick] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<PurgeResult>('/plugins/workflow/admin/transactions/purge-old', {
+      method: 'POST',
+      body: JSON.stringify({ dry_run: true }),
+    })
+      .then((result) => {
+        if (!cancelled) setStale(result);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [staleTick]);
+
+  const debouncedQuery = useDebounced(query.trim(), 300);
+  const list = usePagedList<{ transactions: AdminTransaction[] }>('/plugins/workflow/admin/transactions', {
+    q: debouncedQuery,
+    status: statusFilter === 'all' ? '' : statusFilter,
+  });
+  const transactions = list.body?.transactions ?? [];
+
+  // Deletes every transaction created over 3 months ago, photos included —
+  // after showing how many that is.
+  async function handlePurge() {
+    setPurgeError(null);
+    setPurgeNotice(null);
+    setPurging(true);
+    try {
+      const path = '/plugins/workflow/admin/transactions/purge-old';
+      const preview = await apiFetch<PurgeResult>(path, { method: 'POST', body: JSON.stringify({ dry_run: true }) });
+      if (preview.transactions === 0) {
+        setPurgeNotice('No transactions are older than 3 months.');
+        return;
+      }
+      const before = formatDateTime(preview.cutoff);
+      if (
+        !window.confirm(
+          `Permanently delete ${preview.transactions} transaction(s) created before ${before}, ` +
+            `including ${preview.images} photo(s)? This can’t be undone.`,
+        )
+      ) {
+        return;
+      }
+      const done = await apiFetch<PurgeResult>(path, { method: 'POST', body: JSON.stringify({}) });
+      setPurgeNotice(`Deleted ${done.transactions} transaction(s) and ${done.images} photo(s).`);
+      list.reload();
+      setStaleTick((t) => t + 1);
+    } catch (err) {
+      setPurgeError(errorMessage(err));
+    } finally {
+      setPurging(false);
+    }
+  }
+
+  return (
+    <>
+      {(list.error ?? purgeError) && (
+        <p className="m3-banner m3-banner--error" role="alert">{list.error ?? purgeError}</p>
+      )}
+      {purgeNotice && <p className="m3-banner" role="status">{purgeNotice}</p>}
+      {stale && stale.transactions > 0 && (
+        <p className="m3-banner m3-banner--warning" role="alert">
+          {stale.transactions} transaction(s) ({stale.images} photo(s)) are more than 3 months old — created before{' '}
+          {formatDateTime(stale.cutoff)}. Use “Delete” to remove them.
+        </p>
+      )}
+      <div className="m3-card m3-card--flush">
+        <div className="admin__toolbar">
+          <h2 className="m3-card__title">All transactions</h2>
+          <input
+            className="admin__search"
+            type="search"
+            placeholder="Search code, owner or user"
+            aria-label="Search transactions"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <select
+            className="m3-select m3-select--dense"
+            aria-label="Filter by status"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="all">Any status</option>
+            {Object.entries(STATUS_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="admin__action admin__action--danger"
+            onClick={handlePurge}
+            disabled={purging}
+            title="Delete transactions created more than 3 months ago, with their photos"
+          >
+            {purging ? 'Deleting…' : 'Delete'}
+          </button>
+        </div>
+
+        {!list.body ? (
+          <p className="m3-supporting admin__empty">Loading…</p>
+        ) : transactions.length === 0 ? (
+          <p className="m3-supporting admin__empty">No transactions match.</p>
+        ) : (
+          <div className="m3-table-wrap">
+            <table className="m3-table admin__table">
+              <thead>
+                <tr>
+                  <th>Order #</th>
+                  <th>Code</th>
+                  <th>Owner</th>
+                  <th>User</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transactions.map((t) => (
+                  <tr key={t.id}>
+                    <td>
+                      <button
+                        type="button"
+                        className="admin__action admin__order-link"
+                        onClick={() => setOpenId(t.id)}
+                        aria-label={`Show details for order ${t.id}`}
+                      >
+                        #{t.id}
+                      </button>
+                    </td>
+                    <td><code>{t.code}</code></td>
+                    <td>{t.owner_name}</td>
+                    <td>
+                      {t.user_id ? (
+                        <span className="admin__user-text">
+                          <span className="admin__user-name">{t.user_name}</span>
+                          <span className="admin__user-email">{t.user_email}</span>
+                        </span>
+                      ) : (
+                        <span className="admin__user-text">
+                          <span>{t.customer_name}</span>
+                          <span className="admin__user-email">No account</span>
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      <span className={`admin__txn-status admin__txn-status--${t.status}`}>
+                        {STATUS_LABELS[t.status] ?? t.status}
+                      </span>
+                    </td>
+                    <td className="m3-table__nowrap">{formatDateTime(t.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <Pagination {...list} label="Transactions pages" />
+      </div>
+      {openId !== null && <TransactionDetailsDialog id={openId} onClose={() => setOpenId(null)} />}
+    </>
+  );
+}
+
+function TransactionDetailsDialog({ id, onClose }: { id: number; onClose: () => void }) {
+  const [detail, setDetail] = useState<AdminTransactionDetail | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    apiFetch<{ transaction: AdminTransactionDetail }>(`/plugins/workflow/admin/transactions/${id}`)
+      .then((body) => setDetail(body.transaction))
+      .catch((err) => setError(errorMessage(err)));
+  }, [id]);
+
+  return (
+    <Dialog title={`Order #${id}`} onClose={onClose}>
+      {error && <p className="m3-banner m3-banner--error" role="alert">{error}</p>}
+      {!detail && !error && <p className="m3-supporting">Loading…</p>}
+      {detail && (
+        <>
+          <dl className="admin__details">
+            <dt>Code</dt>
+            <dd><code>{detail.code}</code></dd>
+            <dt>Status</dt>
+            <dd>
+              <span className={`admin__txn-status admin__txn-status--${detail.status}`}>
+                {STATUS_LABELS[detail.status] ?? detail.status}
+              </span>
+            </dd>
+            <dt>Owner</dt>
+            <dd>{detail.owner_name} <span className="admin__user-email">{detail.owner_email}</span></dd>
+            <dt>Customer</dt>
+            <dd>
+              {detail.customer_name}
+              {detail.user_id ? (
+                <span className="admin__user-email"> · account: {detail.user_name} ({detail.user_email})</span>
+              ) : (
+                <span className="admin__user-email"> · no account</span>
+              )}
+            </dd>
+            <dt>Contact</dt>
+            <dd>{detail.customer_contact ?? '—'}</dd>
+            <dt>Registered</dt>
+            <dd>{formatDateTime(detail.created_at)}</dd>
+            <dt>Updated</dt>
+            <dd>{formatDateTime(detail.updated_at)}</dd>
+            <dt>Done</dt>
+            <dd>{detail.done_at ? formatDateTime(detail.done_at) : '—'}</dd>
+          </dl>
+          <h3 className="m3-section-title">Description</h3>
+          {detail.description ? (
+            <RichText html={detail.description} />
+          ) : (
+            <p className="m3-supporting">No description.</p>
+          )}
+          {detail.image_ids.length > 0 && (
+            <>
+              <h3 className="m3-section-title">Photos</h3>
+              <ul className="admin__photos">
+                {detail.image_ids.map((imageId, i) => {
+                  const src = `/api/plugins/workflow/transactions/${detail.id}/images/${imageId}`;
+                  return (
+                    <li key={imageId}>
+                      {/* New tab, not Colorbox: its lightbox would sit under the modal <dialog>. */}
+                      <a href={src} target="_blank" rel="noreferrer" title={`Photo ${i + 1}`}>
+                        <img src={src} alt={`Photo ${i + 1}`} loading="lazy" />
+                      </a>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
+        </>
+      )}
+    </Dialog>
+  );
+}
+
+const PAGE_SIZE = 10;
+
+interface UsersResponse {
+  users: AdminUser[];
+  stats: { total: number; active: number; owners: number; customers: number; role_names: string[] };
+}
+
+function useDebounced<T>(value: T, ms: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), ms);
+    return () => clearTimeout(id);
+  }, [value, ms]);
+  return debounced;
+}
+
+// One server-side page of a list endpoint that answers { total, page_size, ... }
+// for ?page= plus the given filters (empty ones are left out). Changing a
+// filter goes back to page 1; a page left empty (e.g. after a deactivation
+// under an "Active" filter) steps back to the last page that has rows.
+function usePagedList<T>(path: string, filters: Record<string, string>) {
+  const filterKey = new URLSearchParams(Object.entries(filters).filter(([, v]) => v)).toString();
+  const [pageState, setPageState] = useState({ key: filterKey, page: 1 });
+  const page = pageState.key === filterKey ? pageState.page : 1;
+  const [body, setBody] = useState<(T & { total: number; page_size: number }) | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const qs = filterKey ? `${filterKey}&page=${page}` : `page=${page}`;
+    apiFetch<T & { total: number; page_size: number }>(`${path}?${qs}`)
+      .then((next) => {
+        if (cancelled) return;
+        const lastPage = Math.max(1, Math.ceil(next.total / next.page_size));
+        if (page > lastPage) {
+          setPageState({ key: filterKey, page: lastPage });
+          return;
+        }
+        setError(null);
+        setBody(next);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(errorMessage(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [path, filterKey, page, tick]);
+
+  return {
+    body,
+    error,
+    page,
+    total: body?.total ?? 0,
+    pageCount: body ? Math.max(1, Math.ceil(body.total / body.page_size)) : 1,
+    setPage: (next: number) => setPageState({ key: filterKey, page: next }),
+    reload: () => setTick((t) => t + 1),
+  };
+}
+
+function Pagination({
+  page,
+  pageCount,
+  total,
+  setPage,
+  label,
+}: {
+  page: number;
+  pageCount: number;
+  total: number;
+  setPage: (page: number) => void;
+  label: string;
+}) {
+  if (total === 0) return null;
+  const from = (page - 1) * PAGE_SIZE + 1;
+  const to = Math.min(page * PAGE_SIZE, total);
+  return (
+    <nav className="admin__pagination" aria-label={label}>
+      <span className="admin__pagination-info">
+        {from}–{to} of {total}
+      </span>
+      {pageCount > 1 && (
+        <span className="admin__pagination-controls">
+          <button type="button" className="admin__action" onClick={() => setPage(page - 1)} disabled={page === 1}>
+            ‹ Prev
+          </button>
+          <span className="admin__pagination-page" aria-current="page">
+            Page {page} of {pageCount}
+          </span>
+          <button
+            type="button"
+            className="admin__action"
+            onClick={() => setPage(page + 1)}
+            disabled={page === pageCount}
+          >
+            Next ›
+          </button>
+        </span>
+      )}
+    </nav>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: number | undefined }) {
   return (
     <li className="admin__stat">
-      <span className="admin__stat-value">{value}</span>
+      <span className="admin__stat-value">{value ?? '—'}</span>
       <span className="admin__stat-label">{label}</span>
     </li>
   );
@@ -357,8 +741,11 @@ function Dialog({ title, onClose, children }: { title: string; onClose: () => vo
 
   useEffect(() => {
     const dialog = ref.current;
-    dialog?.showModal();
-    return () => dialog?.close();
+    // Guarded: StrictMode runs this twice, and showModal() throws when already
+    // open. No close() in cleanup — that fires the close event (→ onClose),
+    // which would unmount the dialog right after opening; removing the element
+    // takes it out of the top layer anyway.
+    if (dialog && !dialog.open) dialog.showModal();
   }, []);
 
   return (

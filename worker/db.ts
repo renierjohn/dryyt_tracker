@@ -446,6 +446,56 @@ export async function listUsersWithRoles(db: D1Database): Promise<(DbUser & { ro
   return results;
 }
 
+// One page of the admin console's user list, filtered by search text
+// (name/email), role name and active status, plus the matching total. Sorted
+// by role rank (superadmin, admin, owner, user, then any other), then by id.
+export async function searchUsersWithRoles(
+  db: D1Database,
+  params: { q: string; role: string | null; active: boolean | null; limit: number; offset: number },
+): Promise<{ users: (DbUser & { role_name: string })[]; total: number }> {
+  const where: string[] = [];
+  const binds: unknown[] = [];
+  if (params.q) {
+    where.push("(u.display_name LIKE ? ESCAPE '\\' OR u.email LIKE ? ESCAPE '\\')");
+    binds.push(params.q, params.q);
+  }
+  if (params.role) {
+    where.push('r.name = ?');
+    binds.push(params.role);
+  }
+  if (params.active !== null) {
+    where.push('u.is_active = ?');
+    binds.push(params.active ? 1 : 0);
+  }
+  const from = `FROM users u JOIN roles r ON r.id = u.role_id ${where.length ? `WHERE ${where.join(' AND ')}` : ''}`;
+  const [page, count] = await db.batch([
+    db.prepare(`SELECT u.*, r.name as role_name ${from} ORDER BY CASE r.name WHEN 'superadmin' THEN 0 WHEN 'admin' THEN 1 WHEN 'owner' THEN 2 WHEN 'user' THEN 3 ELSE 4 END, u.id ASC LIMIT ? OFFSET ?`).bind(...binds, params.limit, params.offset),
+    db.prepare(`SELECT COUNT(*) AS n ${from}`).bind(...binds),
+  ]);
+  return {
+    users: page.results as (DbUser & { role_name: string })[],
+    total: (count.results[0] as { n: number }).n,
+  };
+}
+
+// Headline counts for the admin console, independent of any filter.
+export async function userStats(
+  db: D1Database,
+): Promise<{ total: number; active: number; owners: number; customers: number; role_names: string[] }> {
+  const [totals, roles] = await db.batch([
+    db.prepare(
+      `SELECT COUNT(*) AS total,
+              COALESCE(SUM(u.is_active), 0) AS active,
+              COALESCE(SUM(r.name = 'owner'), 0) AS owners,
+              COALESCE(SUM(r.name = 'user'), 0) AS customers
+       FROM users u JOIN roles r ON r.id = u.role_id`,
+    ),
+    db.prepare('SELECT DISTINCT r.name FROM users u JOIN roles r ON r.id = u.role_id ORDER BY r.name'),
+  ]);
+  const t = totals.results[0] as { total: number; active: number; owners: number; customers: number };
+  return { ...t, role_names: (roles.results as { name: string }[]).map((r) => r.name) };
+}
+
 export async function updateUserAdminFields(
   db: D1Database,
   userId: number,

@@ -299,3 +299,62 @@ describe('GET /api/plugins/workflow/owners/:ownerId/transactions', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('GET /api/plugins/workflow/admin/transactions', () => {
+  it('lists every owner’s transactions for the superadmin only', async () => {
+    const ownerCookie = await createUserWithRoleAndLogin('admin-txn-owner@example.com', await getOwnerRoleId(), 'AdminTxnOwner');
+    const created = (await (await req('POST', '/api/plugins/workflow/transactions', {
+      customer_name: 'Walk-in',
+    }, ownerCookie)).json()) as { transaction: { id: number; code: string } };
+
+    const superCookie = await createUserWithRoleAndLogin('admin-txn-super@example.com', 1, 'Super');
+    const res = await req('GET', '/api/plugins/workflow/admin/transactions', undefined, superCookie);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { transactions: Array<{ id: number; code: string; owner_name: string; user_id: number | null }> };
+    expect(body.transactions.find((t) => t.id === created.transaction.id)).toMatchObject({
+      code: created.transaction.code, owner_name: 'AdminTxnOwner', user_id: null,
+    });
+
+    expect((await req('GET', '/api/plugins/workflow/admin/transactions', undefined, ownerCookie)).status).toBe(403);
+  });
+
+  it('pages by 10 and filters by search and status', async () => {
+    const ownerCookie = await createUserWithRoleAndLogin('admin-txn-page-owner@example.com', await getOwnerRoleId(), 'PagedTxnOwner');
+    const ids: number[] = [];
+    for (let i = 0; i < 11; i++) {
+      const res = await req('POST', '/api/plugins/workflow/transactions', { customer_name: `Paged txn ${i}` }, ownerCookie);
+      ids.push(((await res.json()) as { transaction: { id: number } }).transaction.id);
+    }
+    await req('PUT', `/api/plugins/workflow/transactions/${ids[0]}/status`, { status: 'done' }, ownerCookie);
+    const superCookie = await createUserWithRoleAndLogin('admin-txn-page-super@example.com', 1, 'Super');
+    type Page = { page: number; total: number; transactions: Array<{ id: number }> };
+    const get = async (qs: string) =>
+      (await (await req('GET', `/api/plugins/workflow/admin/transactions?${qs}`, undefined, superCookie)).json()) as Page;
+
+    const first = await get('q=PagedTxnOwner');
+    expect(first.total).toBe(11);
+    expect(first.transactions).toHaveLength(10);
+    expect((await get('q=PagedTxnOwner&page=2')).transactions).toHaveLength(1);
+    expect((await get('q=PagedTxnOwner&status=done')).transactions.map((t) => t.id)).toEqual([ids[0]]);
+    expect((await get(`q=%23${ids[3]}`)).transactions.map((t) => t.id)).toContain(ids[3]);
+  });
+});
+
+describe('GET /api/plugins/workflow/admin/transactions/:id', () => {
+  it('returns one transaction in full for the superadmin only', async () => {
+    const ownerCookie = await createUserWithRoleAndLogin('admin-txn-detail-owner@example.com', await getOwnerRoleId(), 'DetailOwner');
+    const created = (await (await req('POST', '/api/plugins/workflow/transactions', {
+      customer_name: 'Walk-in', customer_contact: '09123456789', description: 'Two shirts',
+    }, ownerCookie)).json()) as { transaction: { id: number } };
+    const superCookie = await createUserWithRoleAndLogin('admin-txn-detail-super@example.com', 1, 'Super');
+
+    const res = await req('GET', `/api/plugins/workflow/admin/transactions/${created.transaction.id}`, undefined, superCookie);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { transaction: Record<string, unknown> };
+    expect(body.transaction).toMatchObject({
+      owner_name: 'DetailOwner', customer_contact: '09123456789', image_ids: [],
+    });
+    expect((await req('GET', `/api/plugins/workflow/admin/transactions/${created.transaction.id}`, undefined, ownerCookie)).status).toBe(403);
+    expect((await req('GET', '/api/plugins/workflow/admin/transactions/999999', undefined, superCookie)).status).toBe(404);
+  });
+});

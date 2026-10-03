@@ -1,4 +1,4 @@
-import { SELF } from 'cloudflare:test';
+import { SELF, env } from 'cloudflare:test';
 import { describe, it, expect } from 'vitest';
 import { createUserWithRoleAndLogin, getOwnerRoleId } from '../helpers';
 
@@ -216,5 +216,39 @@ describe('owner page viewed by another owner', () => {
     });
     const ownBody = (await own.json()) as { transactions: Array<{ customer_name: string }> };
     expect(ownBody.transactions[0].customer_name).toBe('A customer');
+  });
+});
+
+describe('POST /api/plugins/workflow/admin/transactions/purge-old', () => {
+  it('deletes transactions over 3 months old with their photos, keeping newer ones', async () => {
+    const owner = await createUserWithRoleAndLogin('purge-owner@example.com', await getOwnerRoleId(), 'PurgeOwner');
+    const oldId = await createTransaction(owner);
+    const newId = await createTransaction(owner);
+    const oldImage = ((await (await upload(oldId, JPEG, owner)).json()) as { image: { id: number } }).image.id;
+    await upload(newId, JPEG, owner);
+    await env.DB.prepare("UPDATE workflow_transactions SET created_at = datetime('now', '-4 months') WHERE id = ?").bind(oldId).run();
+    const oldKey = (await env.DB.prepare('SELECT r2_key FROM workflow_transaction_images WHERE id = ?').bind(oldImage).first<{ r2_key: string }>())!.r2_key;
+
+    const superCookie = await createUserWithRoleAndLogin('purge-super@example.com', 1, 'Super');
+    const purge = (body: unknown, cookie = superCookie) =>
+      SELF.fetch('https://example.com/api/plugins/workflow/admin/transactions/purge-old', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Cookie: cookie },
+        body: JSON.stringify(body),
+      });
+
+    expect((await purge({}, owner)).status).toBe(403);
+
+    const preview = (await (await purge({ dry_run: true })).json()) as { transactions: number; images: number; dry_run: boolean };
+    expect(preview).toMatchObject({ dry_run: true });
+    expect(preview.transactions).toBeGreaterThanOrEqual(1);
+    expect(await env.TRANSACTION_IMAGES.get(oldKey)).not.toBeNull();
+
+    const res = await purge({});
+    expect(res.status).toBe(200);
+    expect(await env.DB.prepare('SELECT id FROM workflow_transactions WHERE id = ?').bind(oldId).first()).toBeNull();
+    expect(await env.DB.prepare('SELECT id FROM workflow_transaction_images WHERE id = ?').bind(oldImage).first()).toBeNull();
+    expect(await env.TRANSACTION_IMAGES.get(oldKey)).toBeNull();
+    expect(await env.DB.prepare('SELECT id FROM workflow_transactions WHERE id = ?').bind(newId).first()).not.toBeNull();
   });
 });

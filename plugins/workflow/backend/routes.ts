@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { requireAuth, requirePermission } from '../../../worker/middleware/auth';
+import { requireAuth, requirePermission, requireRole } from '../../../worker/middleware/auth';
 import {
   createUser,
   getActiveOwnerByIdentifier,
@@ -8,6 +8,7 @@ import {
   listUsersByParent,
 } from '../../../worker/db';
 import { isValidContactNumber, isValidEmail } from '../../../worker/util';
+import { likePattern, parsePage, PAGE_SIZE } from '../../../worker/pagination';
 import type { AppBindings } from '../../../worker/types';
 import { sanitizeHtml } from '../../../worker/sanitize';
 import { detectImageMimeType } from '../../../worker/image';
@@ -269,6 +270,107 @@ workflowRoutes.get('/transactions', requirePermission('manage_users'), async (c)
   return c.json({ transactions: transactions.map((t) => ({ ...t, image_ids: imageIds.get(t.id) ?? [] })) });
 });
 
+// Superadmin console: every transaction across all owners, newest first, with
+// the registering owner and (when linked) the customer's account. Paginated:
+// ?page=, ?q= (order #, code, owner, customer/user name or email), ?status=.
+workflowRoutes.get('/admin/transactions', requireRole('superadmin'), async (c) => {
+  const { page, limit, offset } = parsePage(c.req.query('page'));
+  const q = c.req.query('q')?.trim() ?? '';
+  const status = c.req.query('status') ?? '';
+  const where: string[] = [];
+  const binds: unknown[] = [];
+  if (q) {
+    where.push(
+      `(CAST(t.id AS TEXT) = ? OR t.code LIKE ?2 ESCAPE '\\' OR o.display_name LIKE ?2 ESCAPE '\\'
+        OR t.customer_name LIKE ?2 ESCAPE '\\' OR u.display_name LIKE ?2 ESCAPE '\\' OR u.email LIKE ?2 ESCAPE '\\')`,
+    );
+    binds.push(q.replace(/^#/, ''), likePattern(q));
+  }
+  if (STATUSES.has(status)) {
+    where.push(`t.status = ?${binds.length + 1}`);
+    binds.push(status);
+  }
+  const from = `FROM workflow_transactions t
+       JOIN users o ON o.id = t.created_by
+       LEFT JOIN users u ON u.id = t.customer_user_id
+       ${where.length ? `WHERE ${where.join(' AND ')}` : ''}`;
+  const n = binds.length;
+  const [rows, count] = await c.env.DB.batch([
+    c.env.DB
+      .prepare(
+        `SELECT t.id, t.code, t.status, t.customer_name, t.created_at,
+                o.id AS owner_id, o.display_name AS owner_name,
+                u.id AS user_id, u.display_name AS user_name, u.email AS user_email
+         ${from} ORDER BY t.created_at DESC, t.id DESC LIMIT ?${n + 1} OFFSET ?${n + 2}`,
+      )
+      .bind(...binds, limit, offset),
+    c.env.DB.prepare(`SELECT COUNT(*) AS n ${from}`).bind(...binds),
+  ]);
+  return c.json({
+    page,
+    page_size: PAGE_SIZE,
+    total: (count.results[0] as { n: number }).n,
+    transactions: rows.results,
+  });
+});
+
+// Superadmin console: permanently delete every transaction created more than
+// 3 months ago, with its photos (R2 objects + rows). { dry_run: true } only
+// counts. Photos go first, so a failed R2 delete leaves the data intact
+// rather than orphaning stored files.
+workflowRoutes.post('/admin/transactions/purge-old', requireRole('superadmin'), async (c) => {
+  const body = await c.req.json().catch(() => null);
+  const dryRun = body?.dry_run === true;
+  // One cutoff for every statement below, so they all agree on the set.
+  const cutoff = (await c.env.DB.prepare("SELECT datetime('now', '-3 months') AS t").first<{ t: string }>())!.t;
+  const old = 'SELECT id FROM workflow_transactions WHERE created_at < ?';
+
+  const counts = await c.env.DB
+    .prepare(
+      `SELECT (SELECT COUNT(*) FROM workflow_transactions WHERE created_at < ?1) AS transactions,
+              (SELECT COUNT(*) FROM workflow_transaction_images WHERE transaction_id IN (${old.replace('?', '?1')})) AS images`,
+    )
+    .bind(cutoff)
+    .first<{ transactions: number; images: number }>();
+  const result = { cutoff, transactions: counts?.transactions ?? 0, images: counts?.images ?? 0 };
+  if (dryRun || result.transactions === 0) return c.json({ ...result, dry_run: dryRun });
+
+  const { results: images } = await c.env.DB
+    .prepare(`SELECT r2_key FROM workflow_transaction_images WHERE transaction_id IN (${old})`)
+    .bind(cutoff)
+    .all<{ r2_key: string }>();
+  const keys = images.map((i) => i.r2_key);
+  for (let i = 0; i < keys.length; i += 1000) {
+    await c.env.TRANSACTION_IMAGES.delete(keys.slice(i, i + 1000));
+  }
+  await c.env.DB.batch([
+    c.env.DB.prepare(`DELETE FROM workflow_transaction_images WHERE transaction_id IN (${old})`).bind(cutoff),
+    c.env.DB.prepare('DELETE FROM workflow_transactions WHERE created_at < ?').bind(cutoff),
+  ]);
+  return c.json({ ...result, dry_run: false });
+});
+
+// Superadmin console: one transaction in full, with its photos.
+workflowRoutes.get('/admin/transactions/:id', requireRole('superadmin'), async (c) => {
+  const row = await c.env.DB
+    .prepare(
+      `SELECT t.*, o.display_name AS owner_name, o.email AS owner_email,
+              u.display_name AS user_name, u.email AS user_email
+       FROM workflow_transactions t
+       JOIN users o ON o.id = t.created_by
+       LEFT JOIN users u ON u.id = t.customer_user_id
+       WHERE t.id = ?`,
+    )
+    .bind(Number(c.req.param('id')))
+    .first<{ id: number; description: string | null }>();
+  if (!row) return c.json({ error: 'not_found' }, 404);
+  const { results: images } = await c.env.DB
+    .prepare('SELECT id FROM workflow_transaction_images WHERE transaction_id = ? ORDER BY id')
+    .bind(row.id)
+    .all<{ id: number }>();
+  return c.json({ transaction: { ...(await withSafeDescription(row)), image_ids: images.map((i) => i.id) } });
+});
+
 // A customer's own view: transactions registered for them (customer_user_id),
 // across whichever owners registered them. Contact/created_by stay server-side.
 workflowRoutes.get('/my-transactions', requireAuth, async (c) => {
@@ -342,17 +444,17 @@ workflowRoutes.post('/transactions/:id/images', requirePermission('manage_users'
   return c.json({ image }, 201);
 });
 
-// Viewable by the owner who registered the transaction or the customer it was
-// registered for.
+// Viewable by the owner who registered the transaction, the customer it was
+// registered for, or the superadmin (admin console's transaction details).
 workflowRoutes.get('/transactions/:id/images/:imageId', requireAuth, async (c) => {
   const user = c.get('user')!;
   const row = await c.env.DB
     .prepare(
       `SELECT i.r2_key, i.content_type FROM workflow_transaction_images i
        JOIN workflow_transactions t ON t.id = i.transaction_id
-       WHERE i.id = ?1 AND i.transaction_id = ?2 AND (t.created_by = ?3 OR t.customer_user_id = ?3)`,
+       WHERE i.id = ?1 AND i.transaction_id = ?2 AND (t.created_by = ?3 OR t.customer_user_id = ?3 OR ?4)`,
     )
-    .bind(Number(c.req.param('imageId')), Number(c.req.param('id')), user.id)
+    .bind(Number(c.req.param('imageId')), Number(c.req.param('id')), user.id, user.role_name === 'superadmin' ? 1 : 0)
     .first<{ r2_key: string; content_type: string }>();
   if (!row) return c.json({ error: 'not_found' }, 404);
   const object = await c.env.TRANSACTION_IMAGES.get(row.r2_key);

@@ -32,7 +32,7 @@ describe('admin console permission gate', () => {
 describe('GET /api/admin/users', () => {
   it('lists users with role names and never leaks password fields', async () => {
     const superadminCookie = await createUserWithRoleAndLogin('admin-list@example.com', 1, 'Admin List');
-    const res = await req('GET', '/api/admin/users', undefined, superadminCookie);
+    const res = await req('GET', '/api/admin/users?q=admin-list', undefined, superadminCookie);
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       users: Array<{ email: string; role_name: string; password_hash?: unknown; password_salt?: unknown }>;
@@ -41,6 +41,29 @@ describe('GET /api/admin/users', () => {
     expect(found.role_name).toBe('superadmin');
     expect(found.password_hash).toBeUndefined();
     expect(found.password_salt).toBeUndefined();
+  });
+});
+
+describe('GET /api/admin/users pagination', () => {
+  it('pages by 10 with filters, a total and overall stats', async () => {
+    const superadminCookie = await createUserWithRoleAndLogin('admin-page@example.com', 1, 'Admin Page');
+    for (let i = 0; i < 12; i++) {
+      await req('POST', '/api/admin/users', {
+        email: `page-user-${i}@example.com`, password: 'password123', display_name: `Paged ${i}`, role_id: 2,
+      }, superadminCookie);
+    }
+    type Page = { page: number; page_size: number; total: number; users: Array<{ email: string }>; stats: { total: number } };
+    const first = (await (await req('GET', '/api/admin/users?q=page-user-', undefined, superadminCookie)).json()) as Page;
+    expect(first).toMatchObject({ page: 1, page_size: 10, total: 12 });
+    expect(first.users).toHaveLength(10);
+    expect(first.stats.total).toBeGreaterThanOrEqual(13);
+    const second = (await (await req('GET', '/api/admin/users?q=page-user-&page=2', undefined, superadminCookie)).json()) as Page;
+    expect(second.users).toHaveLength(2);
+    const inactive = (await (await req('GET', '/api/admin/users?q=page-user-&status=inactive', undefined, superadminCookie)).json()) as Page;
+    expect(inactive.total).toBe(0);
+    // LIKE wildcards in the search are literal.
+    const wildcard = (await (await req('GET', '/api/admin/users?q=%25', undefined, superadminCookie)).json()) as Page;
+    expect(wildcard.total).toBe(0);
   });
 });
 
@@ -157,5 +180,22 @@ describe('POST /api/admin/users/:id/deactivate and /reactivate', () => {
     const superadminCookie = await createUserWithRoleAndLogin('will-be-id-1-b@example.com', 1, 'Superadmin B');
     const res = await req('POST', '/api/admin/users/1/deactivate', undefined, superadminCookie);
     expect(res.status).toBe(400);
+  });
+});
+
+describe('GET /api/admin/users ordering', () => {
+  it('sorts by role: superadmin, admin, owner, user', async () => {
+    const superadminCookie = await createUserWithRoleAndLogin('order-super@example.com', 1, 'Order Super');
+    const rank = ['superadmin', 'admin', 'owner', 'user'];
+    const seen: string[] = [];
+    for (let page = 1; ; page++) {
+      const body = (await (await req('GET', `/api/admin/users?page=${page}`, undefined, superadminCookie)).json()) as {
+        users: Array<{ role_name: string }>;
+      };
+      if (body.users.length === 0) break;
+      seen.push(...body.users.map((u) => u.role_name));
+    }
+    const ranks = seen.map((r) => (rank.includes(r) ? rank.indexOf(r) : rank.length));
+    expect(ranks).toEqual([...ranks].sort((a, b) => a - b));
   });
 });
