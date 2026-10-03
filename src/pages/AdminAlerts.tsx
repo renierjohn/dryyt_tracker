@@ -67,7 +67,7 @@ export default function AdminAlerts({ user, refresh }: { user: AuthUser; refresh
         </div>
         <div className="m3-card">
           <h2 className="m3-card__title">Message</h2>
-          <AlertEditor submitLabel="Send alert" onSubmit={handleSubmit} />
+          <AlertEditor visibilityOptions={['dashboard']} submitLabel="Send alert" onSubmit={handleSubmit} />
         </div>
       </section>
     </AppShell>

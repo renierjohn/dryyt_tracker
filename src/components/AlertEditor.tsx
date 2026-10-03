@@ -11,17 +11,34 @@ export interface AlertFormValues {
   body_html: string;
 }
 
+const VISIBILITY_LABELS: Record<AlertFormValues['visibility'], string> = {
+  dashboard: 'Dashboard only',
+  public: 'Public only',
+  both: 'Both',
+};
+const ALL_VISIBILITIES = Object.keys(VISIBILITY_LABELS) as AlertFormValues['visibility'][];
+
 export default function AlertEditor({
   initial,
   submitLabel,
   onSubmit,
+  visibilityOptions = ALL_VISIBILITIES,
 }: {
   initial?: AlertFormValues;
   submitLabel: string;
   onSubmit: (values: AlertFormValues) => Promise<void>;
+  // Restricts the Visibility choices; an existing alert outside them is saved
+  // with the first allowed option.
+  visibilityOptions?: AlertFormValues['visibility'][];
 }) {
   const [type, setType] = useState<AlertFormValues['type']>(initial?.type ?? 'info');
-  const [visibility, setVisibility] = useState<AlertFormValues['visibility']>(initial?.visibility ?? 'public');
+  const [visibility, setVisibility] = useState<AlertFormValues['visibility']>(
+    initial && visibilityOptions.includes(initial.visibility)
+      ? initial.visibility
+      : visibilityOptions.includes('public')
+        ? 'public'
+        : visibilityOptions[0],
+  );
   const [bodyHtml, setBodyHtml] = useState(initial?.body_html ?? '');
   const [submitting, setSubmitting] = useState(false);
 
@@ -50,9 +67,9 @@ export default function AlertEditor({
         <label>
           Visibility
           <select value={visibility} onChange={(e) => setVisibility(e.target.value as AlertFormValues['visibility'])}>
-            <option value="dashboard">Dashboard only</option>
-            <option value="public">Public only</option>
-            <option value="both">Both</option>
+            {visibilityOptions.map((v) => (
+              <option key={v} value={v}>{VISIBILITY_LABELS[v]}</option>
+            ))}
           </select>
         </label>
       </div>

@@ -211,7 +211,7 @@ export function AlertsPanel({ user }: { user: AuthUser }) {
       {canSendAlerts(user) && (
         <>
           <h3>New alert</h3>
-          <AlertEditor submitLabel="Create alert" onSubmit={handleCreate} />
+          <AlertEditor visibilityOptions={['public']} submitLabel="Create alert" onSubmit={handleCreate} />
         </>
       )}
       <h3>Your alerts</h3>
@@ -225,6 +225,7 @@ export function AlertsPanel({ user }: { user: AuthUser }) {
           >
             {canSendAlerts(user) && editingId === alert.id ? (
               <AlertEditor
+                visibilityOptions={['public']}
                 initial={{ type: alert.type, visibility: alert.visibility, body_html: alert.body_html }}
                 submitLabel="Save"
                 onSubmit={(values) => handleUpdate(alert.id, values)}
