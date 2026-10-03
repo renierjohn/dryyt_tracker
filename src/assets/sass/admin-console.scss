@@ -1,152 +1,277 @@
-.admin-console {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 32px 20px 64px;
-  text-align: left;
-
-  h1 {
-    text-align: center;
+// Admin console (/admin). Rides on the dashboard layout + tabs (dashboard.scss)
+// and the shared M3 blocks (m3.scss); only the console-specific pieces live here.
+.m3-shell .dashboard.admin {
+  // No shortcuts column here: on desktop, drop the dashboard's two-column grid
+  // and let the console use the full width. Extra class beats dashboard.scss's
+  // .dashboard__content.m3-shell__content regardless of CSS order.
+  &.dashboard__content.m3-shell__content {
+    @media (min-width: 1200px) {
+      grid-template-columns: minmax(0, 1fr);
+      max-width: 1600px;
+    }
   }
 
-  h2 {
-    text-align: left;
+  .admin__stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin: 0 0 16px;
+    padding: 0;
+    list-style: none;
   }
 
-  &__error {
-    color: #dc2626;
-    background: rgba(220, 38, 38, 0.1);
-    border: 1px solid rgba(220, 38, 38, 0.3);
-    border-radius: 6px;
-    padding: 8px 12px;
-    margin-bottom: 16px;
+  .admin__stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 16px 20px;
+    border-radius: 20px;
+    background: var(--m3-surface-container);
   }
 
-  &__form {
+  .admin__stat-value {
+    font: 400 28px/36px var(--m3-font);
+    color: var(--m3-on-surface);
+  }
+
+  .admin__stat-label {
+    font: 500 12px/16px var(--m3-font);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--m3-on-surface-variant);
+  }
+
+  .admin__toolbar {
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-end;
+    align-items: center;
+    gap: 8px 12px;
+    margin: 12px 20px 8px;
+
+    .m3-card__title {
+      flex: 1 1 auto;
+      margin: 0;
+    }
+
+    .m3-select {
+      width: auto;
+    }
+  }
+
+  .admin__search {
+    flex: 0 1 240px;
+    min-width: 160px;
+    height: 40px;
+    padding: 0 14px;
+    font: 400 14px var(--m3-font);
+    color: var(--m3-on-surface);
+    background: var(--m3-surface);
+    border: 1px solid var(--m3-outline);
+    border-radius: 20px;
+    outline: none;
+
+    &:focus {
+      border-color: var(--m3-primary);
+      box-shadow: 0 0 0 1px var(--m3-primary);
+    }
+  }
+
+  .admin__empty {
+    margin: 8px 20px 16px;
+  }
+
+  .admin__table td {
+    vertical-align: middle;
+  }
+
+  // Deactivated users: dim the row's text, but not the actions (Reactivate).
+  .admin__row--inactive td:not(:last-child) {
+    opacity: 0.8;
+  }
+
+  .admin__user {
+    display: flex;
+    align-items: center;
     gap: 12px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 20px;
-    margin-bottom: 32px;
-
-    h2 {
-      flex-basis: 100%;
-      margin: 0 0 4px;
-    }
-
-    p[role='alert'] {
-      flex-basis: 100%;
-      color: #dc2626;
-    }
-
-    label {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      font-size: 14px;
-      color: var(--text);
-    }
-
-    input {
-      font: inherit;
-      color: var(--text-h);
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 6px 10px;
-      min-width: 160px;
-
-      &:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: 1px;
-      }
-
-      &:disabled {
-        opacity: 0.5;
-      }
-    }
-
-    button {
-      align-self: flex-end;
-    }
+    min-width: 0;
   }
 
-  &__table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 32px;
-
-    th,
-    td {
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--border);
-      text-align: left;
-      font-size: 15px;
-    }
-
-    th {
-      color: var(--text);
-      font-weight: 500;
-    }
-
-    td {
-      color: var(--text-h);
-    }
-  }
-
-  &__status {
+  .admin__avatar {
+    flex: none;
     display: inline-flex;
-    padding: 2px 8px;
-    border-radius: 999px;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    font: 500 14px var(--m3-font);
+    color: var(--m3-on-surface);
+    background: var(--m3-secondary-container);
+  }
+
+  .admin__user-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .admin__user-name {
+    font-weight: 500;
+    color: var(--m3-on-surface);
+  }
+
+  .admin__user-email {
+    font-size: 13px;
+    color: var(--m3-on-surface-variant);
+    overflow-wrap: anywhere;
+  }
+
+  .admin__you {
+    margin-left: 6px;
+    padding: 0 6px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--m3-on-primary);
+    background: var(--m3-primary);
+    border-radius: 6px;
+  }
+
+  .admin__chip {
+    display: inline-flex;
+    align-items: center;
+    height: 24px;
+    padding: 0 10px;
+    font-size: 12px;
+    font-weight: 500;
+    text-transform: capitalize;
+    color: var(--m3-on-surface);
+    border: 1px solid var(--m3-outline);
+    border-radius: 8px;
+
+    &--superadmin {
+      color: #a50e0e;
+      border-color: currentColor;
+    }
+
+    &--admin,
+    &--owner {
+      color: var(--m3-primary);
+      border-color: currentColor;
+    }
+  }
+
+  .admin__status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     font-size: 13px;
 
+    &::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
     &--active {
-      color: #15803d;
-      background: rgba(21, 128, 61, 0.12);
+      color: #188038;
     }
 
     &--inactive {
-      color: var(--text);
-      background: var(--code-bg);
+      color: var(--m3-on-surface-variant);
     }
   }
 
-  &__actions {
+  .admin__actions {
     display: flex;
-    gap: 8px;
     flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 4px;
   }
 
-  &__panel {
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 20px;
-  }
-
-  button {
-    font: inherit;
-    color: var(--text-h);
-    background: var(--accent-bg);
-    border: 1px solid var(--accent-border);
-    border-radius: 6px;
-    padding: 6px 12px;
+  .admin__action {
+    height: 32px;
+    padding: 0 12px;
+    font: 500 13px var(--m3-font);
+    color: var(--m3-primary);
+    background: transparent;
+    border: 0;
+    border-radius: 16px;
     cursor: pointer;
-    transition: border-color 0.2s;
 
     &:hover:not(:disabled) {
-      border-color: var(--accent);
+      background: color-mix(in srgb, currentColor 10%, transparent);
+    }
+
+    &:focus-visible {
+      outline: 2px solid currentColor;
+      outline-offset: 1px;
     }
 
     &:disabled {
       cursor: not-allowed;
-      opacity: 0.5;
+      opacity: 0.38;
     }
 
-    &:focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 1px;
+    &--danger {
+      color: #b3261e;
     }
+  }
+}
+
+// Modal dialogs (edit user / send alert). Rendered in the top layer, so not
+// nested under .dashboard.admin.
+.m3-shell .admin__dialog {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  padding: 0;
+  color: var(--m3-on-surface);
+  background: var(--m3-surface-container-high);
+  border: 0;
+  border-radius: 28px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+
+  &::backdrop {
+    background: rgba(32, 33, 36, 0.5);
+  }
+
+  .admin__dialog-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 20px 20px 8px 24px;
+
+    h2 {
+      margin: 0;
+      font: 400 22px/28px var(--m3-font);
+    }
+  }
+
+  .admin__dialog-close {
+    width: 40px;
+    height: 40px;
+    font: 400 24px/1 var(--m3-font);
+    color: inherit;
+    background: transparent;
+    border: 0;
+    border-radius: 50%;
+    cursor: pointer;
+
+    &:hover {
+      background: color-mix(in srgb, currentColor 10%, transparent);
+    }
+  }
+
+  .admin__dialog-body {
+    padding: 8px 24px 24px;
+  }
+
+  .admin__dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
   }
 }

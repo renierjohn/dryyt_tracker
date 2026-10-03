@@ -1,4 +1,4 @@
-import { SELF } from 'cloudflare:test';
+import { SELF, env } from 'cloudflare:test';
 import { describe, it, expect } from 'vitest';
 import { createUserWithRoleAndLogin, getAdminRoleId, getOwnerRoleId } from '../helpers';
 
@@ -30,7 +30,7 @@ describe('POST /api/plugins/workflow/transactions', () => {
     const adminRoleId = await getAdminRoleId();
     const adminCookie = await createUserWithRoleAndLogin('workflow-create@example.com', adminRoleId, 'Admin');
     const res = await req('POST', '/api/plugins/workflow/transactions', {
-      customer_name: 'Jane Doe', customer_contact: 'jane@example.com', description: '2x shirts',
+      customer_name: 'Jane Doe', customer_contact: '09123456789', description: '2x shirts',
     }, adminCookie);
     expect(res.status).toBe(201);
     const body = (await res.json()) as { transaction: { code: string; status: string; customer_name: string } };
@@ -46,6 +46,62 @@ describe('POST /api/plugins/workflow/transactions', () => {
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: string };
     expect(body.error).toBe('missing_customer_name');
+  });
+});
+
+describe('customer email registration', () => {
+  it("registers name+email as the owner's user once, and lists it under /customers", async () => {
+    const adminRoleId = await getAdminRoleId();
+    const adminCookie = await createUserWithRoleAndLogin('workflow-cust-owner@example.com', adminRoleId, 'Admin');
+    const first = await req('POST', '/api/plugins/workflow/transactions', {
+      customer_name: 'Cust One', customer_email: 'Cust1@Example.com',
+    }, adminCookie);
+    expect(first.status).toBe(201);
+    const again = await req('POST', '/api/plugins/workflow/transactions', {
+      customer_name: 'Other Name', customer_email: 'cust1@example.com',
+    }, adminCookie);
+    expect(again.status).toBe(201);
+
+    const res = await req('GET', '/api/plugins/workflow/customers', undefined, adminCookie);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { customers: Array<{ display_name: string; email: string; codes: string[] }> };
+    const codes = await Promise.all([first, again].map(async (r) => ((await r.json()) as { transaction: { code: string } }).transaction.code));
+    expect(body.customers).toEqual([
+      expect.objectContaining({ display_name: 'Cust One', email: 'cust1@example.com', codes: [codes[1], codes[0]] }),
+    ]);
+  });
+
+  it('skips registration for an email that already exists', async () => {
+    const adminRoleId = await getAdminRoleId();
+    const adminCookie = await createUserWithRoleAndLogin('workflow-cust-owner2@example.com', adminRoleId, 'Admin');
+    await createUserWithRoleAndLogin('workflow-cust-existing@example.com', 2, 'Existing');
+    const res = await req('POST', '/api/plugins/workflow/transactions', {
+      customer_name: 'Existing', customer_email: 'workflow-cust-existing@example.com',
+    }, adminCookie);
+    expect(res.status).toBe(201);
+    const list = (await (await req('GET', '/api/plugins/workflow/customers', undefined, adminCookie)).json()) as {
+      customers: unknown[];
+    };
+    expect(list.customers).toEqual([]);
+  });
+
+  it('rejects an invalid contact number with 400', async () => {
+    const adminRoleId = await getAdminRoleId();
+    const adminCookie = await createUserWithRoleAndLogin('workflow-cust-badcontact@example.com', adminRoleId, 'Admin');
+    const res = await req('POST', '/api/plugins/workflow/transactions', {
+      customer_name: 'X', customer_contact: 'call me',
+    }, adminCookie);
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toBe('invalid_contact_number');
+  });
+
+  it('rejects an invalid email with 400', async () => {
+    const adminRoleId = await getAdminRoleId();
+    const adminCookie = await createUserWithRoleAndLogin('workflow-cust-bad@example.com', adminRoleId, 'Admin');
+    const res = await req('POST', '/api/plugins/workflow/transactions', {
+      customer_name: 'X', customer_email: 'nope',
+    }, adminCookie);
+    expect(res.status).toBe(400);
   });
 });
 
@@ -102,7 +158,7 @@ describe('GET /api/plugins/workflow/track/:code', () => {
     const adminRoleId = await getAdminRoleId();
     const adminCookie = await createUserWithRoleAndLogin('workflow-track@example.com', adminRoleId, 'Admin');
     const createRes = await req('POST', '/api/plugins/workflow/transactions', {
-      customer_name: 'Track Target', customer_contact: 'secret@example.com', description: 'Trousers',
+      customer_name: 'Track Target', customer_contact: '09998887777', description: 'Trousers',
     }, adminCookie);
     const created = (await createRes.json()) as { transaction: { code: string } };
 
@@ -122,16 +178,17 @@ describe('GET /api/plugins/workflow/track/:code', () => {
 });
 
 describe('GET /api/plugins/workflow/owners/:ownerId/transactions', () => {
-  it("lists an owner's own transactions with no auth required, omitting contact/created_by", async () => {
+  it("lists an owner's own transactions, omitting contact/created_by", async () => {
     const ownerRoleId = await getOwnerRoleId();
     const ownerCookie = await createUserWithRoleAndLogin('workflow-public-owner@example.com', ownerRoleId, 'Owner');
     const me = (await (await req('GET', '/api/auth/me', undefined, ownerCookie)).json()) as { user: { id: number } };
 
     await req('POST', '/api/plugins/workflow/transactions', {
-      customer_name: 'Public Target', customer_contact: 'secret@example.com', description: 'Shoes',
+      customer_name: 'Public Target', customer_contact: '09998887777', description: 'Shoes',
     }, ownerCookie);
 
-    const res = await SELF.fetch(`https://example.com/api/plugins/workflow/owners/${me.user.id}/transactions`);
+    // Signed in (any session) to get identifying fields — anonymous visitors get them withheld.
+    const res = await req('GET', `/api/plugins/workflow/owners/${me.user.id}/transactions`, undefined, ownerCookie);
     expect(res.status).toBe(200);
     const body = (await res.json()) as { owner_display_name: string; transactions: Array<Record<string, unknown>> };
     expect(body.owner_display_name).toBe('Owner');
@@ -139,6 +196,78 @@ describe('GET /api/plugins/workflow/owners/:ownerId/transactions', () => {
     expect(body.transactions[0].customer_name).toBe('Public Target');
     expect(body.transactions[0].customer_contact).toBeUndefined();
     expect(body.transactions[0].created_by).toBeUndefined();
+  });
+
+  it('sanitizes rich-text descriptions and drops empty ones', async () => {
+    const ownerRoleId = await getOwnerRoleId();
+    const cookie = await createUserWithRoleAndLogin('workflow-rich@example.com', ownerRoleId, 'RichOwner');
+    const rich = (await (await req('POST', '/api/plugins/workflow/transactions', {
+      customer_name: 'Rich', description: '<p><strong>2x</strong> shirts<img src=x onerror=alert(1)></p><script>alert(1)</script>',
+    }, cookie)).json()) as { transaction: { description: string | null } };
+    expect(rich.transaction.description).toBe('<p><strong>2x</strong> shirts</p>');
+
+    const empty = (await (await req('POST', '/api/plugins/workflow/transactions', {
+      customer_name: 'Empty', description: '<p>&nbsp;</p>',
+    }, cookie)).json()) as { transaction: { description: string | null } };
+    expect(empty.transaction.description).toBeNull();
+  });
+
+  it('stamps done_at on the move to done, keeps it through pickup, clears it on reopen', async () => {
+    const ownerRoleId = await getOwnerRoleId();
+    const cookie = await createUserWithRoleAndLogin('workflow-done-at@example.com', ownerRoleId, 'DoneAtOwner');
+    const created = (await (await req('POST', '/api/plugins/workflow/transactions', { customer_name: 'Timed' }, cookie)).json()) as {
+      transaction: { id: number; done_at: string | null };
+    };
+    expect(created.transaction.done_at).toBeNull();
+    const setStatus = async (status: string) =>
+      ((await (await req('PUT', `/api/plugins/workflow/transactions/${created.transaction.id}/status`, { status }, cookie)).json()) as {
+        transaction: { done_at: string | null };
+      }).transaction.done_at;
+
+    expect(await setStatus('in_progress')).toBeNull();
+    const doneAt = await setStatus('done');
+    expect(doneAt).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    expect(await setStatus('ready_to_pickup')).toBe(doneAt);
+    expect(await setStatus('in_progress')).toBeNull();
+  });
+
+  it('shows anonymous visitors only in-progress then on-hold, oldest first', async () => {
+    const ownerRoleId = await getOwnerRoleId();
+    const ownerCookie = await createUserWithRoleAndLogin('workflow-public-queue@example.com', ownerRoleId, 'QueueOwner');
+    const create = async (name: string, status: string, createdAt: string) => {
+      const res = await req('POST', '/api/plugins/workflow/transactions', { customer_name: name }, ownerCookie);
+      const { transaction } = (await res.json()) as { transaction: { id: number } };
+      await env.DB.prepare('UPDATE workflow_transactions SET status = ?, created_at = ? WHERE id = ?')
+        .bind(status, createdAt, transaction.id)
+        .run();
+    };
+    await create('Hold new', 'hold', '2026-01-04 00:00:00');
+    await create('Progress new', 'in_progress', '2026-01-03 00:00:00');
+    await create('Done', 'done', '2026-01-01 00:00:00');
+    await create('Hold old', 'hold', '2026-01-02 00:00:00');
+    await create('Progress old', 'in_progress', '2026-01-01 00:00:00');
+    await create('Pickup', 'ready_to_pickup', '2026-01-01 00:00:00');
+
+    const anon = (await (await SELF.fetch('https://example.com/api/plugins/workflow/owners/QueueOwner/transactions')).json()) as {
+      transactions: Array<Record<string, unknown>>;
+    };
+    expect(anon.transactions.map((t) => [t.status, t.created_at])).toEqual([
+      ['in_progress', '2026-01-01 00:00:00'],
+      ['in_progress', '2026-01-03 00:00:00'],
+      ['hold', '2026-01-02 00:00:00'],
+      ['hold', '2026-01-04 00:00:00'],
+    ]);
+    for (const t of anon.transactions) {
+      expect(t.code).toBeNull();
+      expect(t.customer_name).toBeNull();
+      expect(t.description).toBeNull();
+      expect(t.done_at).toBeUndefined();
+    }
+
+    const signedIn = (await (await req('GET', '/api/plugins/workflow/owners/QueueOwner/transactions', undefined, ownerCookie)).json()) as {
+      transactions: unknown[];
+    };
+    expect(signedIn.transactions).toHaveLength(6);
   });
 
   it('returns 404 for a non-owner user id', async () => {
@@ -158,7 +287,7 @@ describe('GET /api/plugins/workflow/owners/:ownerId/transactions', () => {
     const ownerCookie = await createUserWithRoleAndLogin('workflow-public-byname@example.com', ownerRoleId, 'NameLookupOwner');
     await req('POST', '/api/plugins/workflow/transactions', { customer_name: 'By Name' }, ownerCookie);
 
-    const res = await SELF.fetch('https://example.com/api/plugins/workflow/owners/NameLookupOwner/transactions');
+    const res = await req('GET', '/api/plugins/workflow/owners/NameLookupOwner/transactions', undefined, ownerCookie);
     expect(res.status).toBe(200);
     const body = (await res.json()) as { owner_display_name: string; transactions: Array<{ customer_name: string }> };
     expect(body.owner_display_name).toBe('NameLookupOwner');

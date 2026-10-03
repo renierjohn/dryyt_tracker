@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch, ApiError } from '../lib/api';
+import AppShell from '../components/AppShell';
 import '../assets/sass/auth-form.scss';
 
 export default function Register({ onRegistered }: { onRegistered: () => Promise<void> }) {
@@ -26,22 +27,24 @@ export default function Register({ onRegistered }: { onRegistered: () => Promise
   }
 
   return (
-    <form className="auth-form" onSubmit={handleSubmit}>
-      <h1>Register</h1>
-      {error && <p className="auth-form__error" role="alert">{error}</p>}
-      <label>
-        Display name
-        <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
-      </label>
-      <label>
-        Email
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-      </label>
-      <label>
-        Password
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
-      </label>
-      <button className="auth-form__button" type="submit">Register</button>
-    </form>
+    <AppShell active="register">
+      <form className="auth-form" onSubmit={handleSubmit}>
+        <h1>Register</h1>
+        {error && <p className="auth-form__error" role="alert">{error}</p>}
+        <label>
+          Owner name
+          <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
+        </label>
+        <label>
+          Email
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        </label>
+        <label>
+          Password
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
+        </label>
+        <button className="auth-form__button" type="submit">Register</button>
+      </form>
+    </AppShell>
   );
 }

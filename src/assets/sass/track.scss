@@ -1,81 +1,249 @@
-.track {
-  max-width: 480px;
-  margin: 96px auto 0;
-  padding: 32px;
-  text-align: center;
+// /track — order lookup result, inside the M3 app shell (m3.scss). The search
+// card reuses the homepage's track card (home.scss).
+.m3-shell .track {
+  // Narrower column than other .m3-page pages; headline and card stay aligned.
+  &.m3-page > * {
+    max-width: 640px;
+  }
 
-  &__form {
+  &__search {
+    max-width: none;
+    margin-bottom: 16px;
+  }
+
+  &__loading {
+    padding-inline: 4px;
+  }
+
+  &__result-head {
     display: flex;
-    gap: 8px;
-    align-items: flex-end;
-    justify-content: center;
     flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
     margin-bottom: 24px;
+  }
 
-    label {
+  &__result-head {
+    align-items: flex-start;
+  }
+
+  &__result-id {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  &__qr {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: center;
+    margin: 0;
+
+    .qr-code {
+      display: block;
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .qr-code--loading {
+      background: var(--m3-surface-container);
+    }
+
+    figcaption {
+      font-size: 11px;
+      line-height: 16px;
+      letter-spacing: 0.4px;
+      color: var(--m3-on-surface-variant);
+    }
+  }
+
+  &__photos {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+
+    ul {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    a {
+      display: block;
+      overflow: hidden;
+      border-radius: 12px;
+      cursor: zoom-in;
+
+      &:focus-visible {
+        outline: 2px solid var(--m3-primary);
+        outline-offset: 2px;
+      }
+    }
+
+    img {
+      display: block;
+      width: 100%;
+      aspect-ratio: 1;
+      object-fit: cover;
+      background: var(--m3-surface-container);
+      transition: transform 0.2s;
+    }
+
+    a:hover img {
+      transform: scale(1.04);
+    }
+  }
+
+  &__code {
+    padding: 0;
+    font: 500 28px/36px var(--m3-font);
+    letter-spacing: 4px;
+    color: var(--m3-on-surface);
+    background: none;
+  }
+
+  // Status chip, colored per state (Google's status palette).
+  &__chip {
+    display: inline-flex;
+    align-items: center;
+    height: 32px;
+    padding: 0 16px;
+    font: 500 14px/20px var(--m3-font);
+    letter-spacing: 0.1px;
+    border-radius: 8px;
+    color: #174ea6;
+    background: #e8f0fe;
+
+    &--hold {
+      color: #b06000;
+      background: #fef7e0;
+    }
+
+    &--done {
+      color: #0d652d;
+      background: #e6f4ea;
+    }
+
+    &--ready_to_pickup {
+      color: #0d652d;
+      background: #ceead6;
+    }
+  }
+
+  // Horizontal progress: in progress → done → ready for pickup. Steps up to
+  // and including the current status are filled; the line between two steps
+  // fills once the later one is reached. Plain selectors below: this block is
+  // nested under `.m3-shell .track`, so `&`-compound selectors would repeat
+  // that whole prefix and never match.
+  &__steps {
+    display: flex;
+    margin: 0 0 24px;
+    padding: 0;
+    list-style: none;
+
+    .track__step {
+      position: relative;
+      flex: 1;
       display: flex;
       flex-direction: column;
-      gap: 4px;
-      font-size: 14px;
-      color: var(--text);
-      text-align: left;
+      gap: 8px;
+      align-items: center;
+      text-align: center;
     }
 
-    input {
-      font: inherit;
-      color: var(--text-h);
+    // Line from the previous dot's centre to this one's (12px = dot radius).
+    .track__step + .track__step::before {
+      content: '';
+      position: absolute;
+      top: 11px;
+      right: calc(50% + 12px);
+      left: calc(-50% + 12px);
+      height: 3px;
+      border-radius: 2px;
+      background: var(--border);
+    }
+
+    .track__step--done + .track__step--done::before {
+      background: var(--m3-primary);
+    }
+
+    .track__step-dot {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border: 2px solid var(--m3-outline);
+      border-radius: 50%;
       background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 6px 10px;
-      text-transform: uppercase;
+      transition:
+        background 0.2s,
+        border-color 0.2s;
+    }
 
-      &:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: 1px;
+    .track__step--done .track__step-dot {
+      border-color: var(--m3-primary);
+      background: var(--m3-primary);
+
+      // Checkmark.
+      &::after {
+        content: '';
+        width: 6px;
+        height: 11px;
+        margin-top: -2px;
+        border: solid var(--m3-on-primary);
+        border-width: 0 2px 2px 0;
+        transform: rotate(45deg);
       }
     }
 
-    button {
-      font: inherit;
-      color: var(--text-h);
-      background: var(--accent-bg);
-      border: 1px solid var(--accent-border);
-      border-radius: 6px;
-      padding: 7px 16px;
-      cursor: pointer;
-      transition: border-color 0.2s;
+    .track__step--current .track__step-dot {
+      box-shadow: 0 0 0 5px color-mix(in srgb, var(--m3-primary) 22%, transparent);
+    }
 
-      &:hover {
-        border-color: var(--accent);
-      }
+    .track__step-label {
+      font-size: 12px;
+      line-height: 16px;
+      letter-spacing: 0.4px;
+      color: var(--m3-on-surface-variant);
+    }
 
-      &:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: 1px;
-      }
+    .track__step--done .track__step-label {
+      color: var(--m3-on-surface);
+    }
+
+    .track__step--current .track__step-label {
+      font-weight: 500;
     }
   }
 
-  &__result {
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 20px;
-    margin-top: 16px;
-  }
+  &__details {
+    display: grid;
+    gap: 16px;
+    margin: 0;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
 
-  &__status {
-    font-size: 20px;
-    font-weight: 600;
-    color: var(--text-h);
-  }
+    dt {
+      font-size: 12px;
+      line-height: 16px;
+      letter-spacing: 0.4px;
+      color: var(--m3-on-surface-variant);
+    }
 
-  &__updated {
-    color: var(--text);
-    font-size: 13px;
-  }
-
-  p[role='alert'] {
-    color: #dc2626;
+    dd {
+      margin: 2px 0 0;
+      font-size: 16px;
+      line-height: 24px;
+      color: var(--m3-on-surface);
+    }
   }
 }

@@ -1,0 +1,665 @@
+// Material 3 app shell shared by Home, Login and Register (see AppShell.tsx).
+
+// Material 3 tokens mapped onto the global palette (_variables.scss): neutral
+// surfaces/text from about.google's greys, primary from the theme's --accent.
+.m3-shell {
+  --m3-primary: var(--accent);
+  --m3-on-primary: #fff;
+  --m3-surface: var(--bg);
+  --m3-surface-container: var(--surface);
+  --m3-surface-container-high: var(--code-bg);
+  --m3-secondary-container: color-mix(in srgb, var(--accent) 16%, var(--bg));
+  --m3-on-surface: var(--text-h);
+  --m3-on-surface-variant: var(--text);
+  --m3-outline: #80868b;
+  // Google Sans for headings/labels, Google Sans Text for body copy.
+  --m3-font: var(--heading);
+
+  // Material 3 window size classes: compact (<600px) gets a top app bar and a
+  // bottom navigation bar; medium (600–1199px) and expanded (≥1200px) move the
+  // navigation into a rail on the left.
+  display: grid;
+  grid-template-areas:
+    'bar'
+    'content';
+  grid-template-rows: auto 1fr;
+  height: 100svh;
+  text-align: left;
+  font-family: var(--sans);
+  color: var(--m3-on-surface-variant);
+  background: var(--m3-surface);
+
+  @media (min-width: 600px) {
+    grid-template-areas:
+      'nav bar'
+      'nav content';
+    grid-template-columns: 80px 1fr;
+    grid-template-rows: auto 1fr;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  &__bar {
+    grid-area: bar;
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+    padding: 0 16px 0 20px;
+  }
+
+  &__brand {
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
+    text-decoration: none;
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--m3-on-surface);
+  }
+
+  &__logo {
+    display: block;
+    width: 32px;
+    height: 32px;
+  }
+
+  &__avatar {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--m3-on-primary);
+    background: var(--m3-primary);
+  }
+
+  &__content {
+    grid-area: content;
+    overflow-y: auto;
+    // Clear the fixed bottom navigation bar on compact screens.
+    padding: 8px 16px calc(104px + env(safe-area-inset-bottom));
+
+    @media (min-width: 600px) {
+      padding: 8px 24px 32px;
+    }
+  }
+}
+
+.m3-icon {
+  width: 24px;
+  height: 24px;
+  fill: currentColor;
+}
+
+// Material 3 navigation bar (compact) / navigation rail (medium and up).
+.m3-nav {
+  grid-area: nav;
+  display: flex;
+  flex: none;
+  justify-content: space-around;
+  // Compact: pinned to the bottom of the viewport so it stays put while the
+  // page scrolls (and isn't pushed off-screen by e.g. the masquerade banner).
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 10;
+  min-height: 80px;
+  padding: 12px 8px calc(16px + env(safe-area-inset-bottom));
+  background: var(--m3-surface-container);
+  box-shadow: 0 -1px 3px rgba(60, 64, 67, 0.15);
+
+  @media (min-width: 600px) {
+    position: static;
+    box-shadow: none;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 12px;
+    height: auto;
+    padding: 80px 0 calc(24px + env(safe-area-inset-bottom));
+    background: var(--m3-surface);
+    border-right: 1px solid var(--border);
+
+    .m3-nav__item {
+      flex: none;
+    }
+  }
+
+  &__item {
+    appearance: none;
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 4px;
+    align-items: center;
+    padding: 0;
+    font: inherit;
+    color: var(--m3-on-surface-variant);
+    text-decoration: none;
+    background: none;
+    border: 0;
+    cursor: pointer;
+
+    &:hover .m3-nav__pill {
+      background: color-mix(in srgb, var(--m3-on-surface) 8%, transparent);
+    }
+
+    &:hover .m3-nav__pill--active {
+      background: var(--m3-secondary-container);
+    }
+
+    &:focus-visible {
+      outline: none;
+
+      .m3-nav__pill {
+        outline: 2px solid var(--m3-primary);
+      }
+    }
+  }
+
+  &__pill {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 32px;
+    border-radius: 16px;
+    transition: background 0.2s;
+
+    &--active {
+      color: var(--m3-on-surface);
+      background: var(--m3-secondary-container);
+    }
+  }
+
+  &__label {
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+    letter-spacing: 0.5px;
+  }
+
+  &__item[aria-current='page'] &__label {
+    color: var(--m3-on-surface);
+    font-weight: 700;
+  }
+}
+
+// The homepage is a full-window app, so drop #root's centered column + borders.
+// Shell pages are full-window apps, so drop #root's centered column + borders.
+#root:has(> .m3-shell) {
+  width: 100%;
+  border-inline: 0;
+}
+
+// Shared M3 building blocks for pages rendered inside the shell (Admin alerts,
+// the Theme and Workflow plugin pages). Home and Dashboard keep their own
+// page-specific blocks in home.scss / dashboard.scss.
+.m3-shell {
+  // Pass as AppShell's contentClassName for a centered single column.
+  .m3-page.m3-shell__content {
+    @media (min-width: 1200px) {
+      padding: 8px 32px 32px;
+    }
+
+    > * {
+      width: 100%;
+      max-width: 960px;
+      margin-inline: auto;
+    }
+  }
+
+  .m3-headline {
+    margin-top: 8px;
+    margin-bottom: 20px;
+    padding-inline: 4px;
+    font: 400 32px/40px var(--m3-font);
+    letter-spacing: -0.25px;
+    color: var(--m3-on-surface);
+  }
+
+  .m3-supporting {
+    margin: 0 0 16px;
+    font-size: 14px;
+    line-height: 20px;
+    color: var(--m3-on-surface-variant);
+  }
+
+  .m3-card {
+    margin-bottom: 16px;
+    padding: 20px;
+    border-radius: 28px;
+    background: var(--m3-surface-container-high);
+
+    &--flush {
+      padding: 8px 0;
+      overflow: hidden;
+    }
+  }
+
+  .m3-card__title {
+    margin: 0 0 16px;
+    font: 500 16px/24px var(--m3-font);
+    letter-spacing: 0.15px;
+    color: var(--m3-on-surface);
+  }
+
+  .m3-card--flush .m3-card__title {
+    margin: 12px 20px 8px;
+  }
+
+  // <details> card, collapsed by default; its <summary> is the card title.
+  .m3-collapsible {
+    > summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 0;
+      cursor: pointer;
+      list-style: none;
+
+      &::-webkit-details-marker {
+        display: none;
+      }
+
+      &::after {
+        content: '';
+        width: 8px;
+        height: 8px;
+        border-right: 2px solid currentColor;
+        border-bottom: 2px solid currentColor;
+        transform: rotate(45deg);
+        transition: transform 0.15s;
+      }
+
+      &:focus-visible {
+        outline: 2px solid var(--m3-primary);
+        outline-offset: 4px;
+        border-radius: 4px;
+      }
+    }
+
+    &[open] > summary {
+      margin-bottom: 16px;
+
+      &::after {
+        transform: rotate(-135deg);
+      }
+    }
+  }
+
+  .m3-section-title {
+    margin: 0 4px 8px;
+    font: 500 14px/20px var(--m3-font);
+    letter-spacing: 0.1px;
+    color: var(--m3-primary);
+  }
+
+  // Grid of outlined fields; anything that isn't a <label> spans the row.
+  .m3-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    align-items: end;
+
+    > * {
+      grid-column: 1 / -1;
+    }
+
+    > label {
+      grid-column: auto;
+    }
+
+    > .m3-button {
+      justify-self: start;
+    }
+
+    > .m3-card__title {
+      margin-bottom: 0;
+    }
+  }
+
+  .m3-field,
+  .m3-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--m3-on-surface-variant);
+  }
+
+  .m3-field input,
+  .m3-field select,
+  .m3-form input,
+  .m3-form select,
+  .m3-select {
+    width: 100%;
+    height: 48px;
+    padding: 0 14px;
+    font: 400 16px var(--m3-font);
+    color: var(--m3-on-surface);
+    background: transparent;
+    border: 1px solid var(--m3-outline);
+    border-radius: 4px;
+    outline: none;
+    transition: border-color 0.15s;
+
+    &:hover {
+      border-color: var(--m3-on-surface);
+    }
+
+    &:focus,
+    &:focus-visible {
+      border: 2px solid var(--m3-primary);
+      padding: 0 13px;
+    }
+
+    option {
+      color: var(--m3-on-surface);
+      background: var(--m3-surface);
+    }
+  }
+
+  .m3-field input[aria-invalid='true'],
+  .m3-form input[aria-invalid='true'] {
+    border-color: #b3261e;
+  }
+
+  // Inline validation message under a field.
+  .m3-field-error {
+    font-size: 12px;
+    color: #b3261e;
+  }
+
+  // Compact select for table rows.
+  .m3-select--dense {
+    width: auto;
+    height: 36px;
+    padding: 0 10px;
+    font-size: 14px;
+
+    &:focus,
+    &:focus-visible {
+      padding: 0 9px;
+    }
+  }
+
+  .m3-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 40px;
+    padding: 0 24px;
+    font: 500 14px/20px var(--m3-font);
+    letter-spacing: 0.1px;
+    color: var(--m3-on-primary);
+    background: var(--m3-primary);
+    border: 0;
+    border-radius: 20px;
+    cursor: pointer;
+    transition:
+      box-shadow 0.15s,
+      filter 0.15s;
+
+    &:hover:not(:disabled) {
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+      filter: brightness(1.08);
+    }
+
+    &:active:not(:disabled) {
+      filter: brightness(0.92);
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.38;
+    }
+
+    // Tonal variant: secondary actions.
+    &--tonal {
+      color: var(--m3-on-surface);
+      background: var(--m3-secondary-container);
+    }
+
+    // For a <label> styled as a button (file pickers), which can't be :disabled.
+    &.is-disabled {
+      cursor: progress;
+      opacity: 0.6;
+      pointer-events: none;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--m3-primary);
+      outline-offset: 2px;
+    }
+  }
+
+  .m3-banner {
+    margin: 0 0 16px;
+    padding: 12px 16px;
+    font-size: 14px;
+    line-height: 20px;
+    border-radius: 12px;
+    color: var(--m3-on-surface);
+    background: var(--m3-secondary-container);
+
+    &--error {
+      color: #a50e0e;
+      background: #fce8e6;
+    }
+
+    strong {
+      font-family: ui-monospace, monospace;
+      letter-spacing: 2px;
+    }
+  }
+
+  // Owner-written alert (rich text), colored per type — Google's status palette.
+  .m3-alert {
+    margin: 0 0 16px;
+    padding: 16px 20px;
+    font-size: 16px;
+    line-height: 24px;
+    border-radius: 16px;
+    border-left: 4px solid currentColor;
+    color: #174ea6;
+    background: #e8f0fe;
+
+    > :first-child {
+      margin-top: 0;
+    }
+
+    > :last-child {
+      margin-bottom: 0;
+    }
+
+    p + p,
+    ul,
+    ol {
+      margin: 8px 0 0;
+    }
+
+    a {
+      color: inherit;
+      font-weight: 500;
+    }
+
+    &--success {
+      color: #0d652d;
+      background: #e6f4ea;
+    }
+
+    &--warning {
+      color: #8a4b00;
+      background: #fef7e0;
+    }
+
+    &--danger {
+      color: #a50e0e;
+      background: #fce8e6;
+    }
+
+    &--dismissible {
+      position: relative;
+      padding-right: 48px;
+
+      // The body sits in its own wrapper next to the close button.
+      > div > :first-child {
+        margin-top: 0;
+      }
+
+      > div > :last-child {
+        margin-bottom: 0;
+      }
+    }
+  }
+
+  .m3-alert__close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 32px;
+    height: 32px;
+    font: 400 22px/1 var(--m3-font);
+    color: inherit;
+    background: transparent;
+    border: 0;
+    border-radius: 50%;
+    cursor: pointer;
+
+    &:hover {
+      background: color-mix(in srgb, currentColor 12%, transparent);
+    }
+
+    &:focus-visible {
+      outline: 2px solid currentColor;
+      outline-offset: 2px;
+    }
+  }
+
+  .m3-table-wrap {
+    overflow-x: auto;
+  }
+
+  .m3-table {
+    width: 100%;
+    min-width: 560px;
+    border-collapse: collapse;
+
+    th,
+    td {
+      padding: 12px 20px;
+      text-align: left;
+      font-size: 14px;
+      border-bottom: 1px solid color-mix(in srgb, var(--m3-outline) 40%, transparent);
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    th {
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      color: var(--m3-on-surface-variant);
+    }
+
+    td {
+      color: var(--m3-on-surface);
+    }
+
+    // Placeholder text for withheld values: blurred so it reads as "hidden".
+    .m3-redacted {
+      display: inline-block;
+      color: transparent;
+      text-shadow: 0 0 8px var(--m3-on-surface);
+      white-space: nowrap;
+      user-select: none;
+    }
+
+    .m3-table__nowrap {
+      white-space: nowrap;
+    }
+
+    code {
+      font-family: ui-monospace, monospace;
+      font-size: 14px;
+      letter-spacing: 1px;
+      padding: 0;
+      background: none;
+    }
+  }
+
+  // Radio cards (theme flavor picker).
+  .m3-choice-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .m3-choice {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--m3-on-surface);
+    border: 1px solid var(--m3-outline);
+    border-radius: 16px;
+    cursor: pointer;
+    transition:
+      background 0.15s,
+      border-color 0.15s;
+
+    &:hover {
+      background: color-mix(in srgb, var(--m3-on-surface) 8%, transparent);
+    }
+
+    input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    &:has(input:checked) {
+      border: 2px solid var(--m3-primary);
+      padding: 15px;
+      background: var(--m3-secondary-container);
+    }
+
+    &:has(input:focus-visible) {
+      outline: 2px solid var(--m3-primary);
+      outline-offset: 2px;
+    }
+  }
+
+  .m3-swatch {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+  }
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

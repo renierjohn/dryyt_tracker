@@ -1,0 +1,4 @@
+-- The owner's user this transaction was registered for (set when the customer
+-- email matches or creates one of the owner's users). NULL for walk-ins and
+-- for transactions registered before this column existed.
+ALTER TABLE workflow_transactions ADD COLUMN customer_user_id INTEGER REFERENCES users(id);

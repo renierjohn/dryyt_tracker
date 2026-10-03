@@ -1,6 +1,7 @@
 import { Fragment } from 'react'
 import { Navigate, Routes, Route } from 'react-router-dom'
 import { useCurrentUser } from './lib/useCurrentUser'
+import { SessionContext } from './lib/session'
 import { isSuperadmin, canSendAlerts, hasPermission } from './lib/permissions'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -23,7 +24,7 @@ function App() {
   if (loading) return <p>Loading…</p>
 
   return (
-    <>
+    <SessionContext.Provider value={{ user, refresh }}>
       {/* Root-level extension point: plugins that need to act on every route (not
           just one host page) register a component for this slot — e.g. the theme
           plugin applies the signed-in user's flavor here. */}
@@ -63,7 +64,7 @@ function App() {
           path="/admin/alerts"
           element={
             !user ? <Navigate to="/login" replace />
-            : canSendAlerts(user) ? <AdminAlerts />
+            : canSendAlerts(user) ? <AdminAlerts user={user} refresh={refresh} />
             : <Navigate to="/dashboard" replace />
           }
         />
@@ -82,7 +83,7 @@ function App() {
           )
         })}
       </Routes>
-    </>
+    </SessionContext.Provider>
   )
 }
 

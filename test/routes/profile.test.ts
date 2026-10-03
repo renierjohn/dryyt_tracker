@@ -51,6 +51,26 @@ describe('PUT /api/profile', () => {
     expect(body.user.email).toBe('profile-put-new@example.com');
   });
 
+  it('sets, keeps and clears contact_number', async () => {
+    const cookie = await registerAndLogin('profile-phone@example.com', 'Phone');
+    let res = await put('/api/profile', { contact_number: ' +63 912 345 6789 ' }, cookie);
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { user: { contact_number: string } }).user.contact_number).toBe('+63 912 345 6789');
+
+    res = await put('/api/profile', { display_name: 'Phone 2' }, cookie);
+    expect(((await res.json()) as { user: { contact_number: string } }).user.contact_number).toBe('+63 912 345 6789');
+
+    res = await put('/api/profile', { contact_number: '' }, cookie);
+    expect(((await res.json()) as { user: { contact_number: string | null } }).user.contact_number).toBeNull();
+  });
+
+  it('rejects an invalid contact_number with 400', async () => {
+    const cookie = await registerAndLogin('profile-phone-bad@example.com', 'Phone Bad');
+    const res = await put('/api/profile', { contact_number: 'call me' }, cookie);
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toBe('invalid_contact_number');
+  });
+
   it('rejects an email already taken by someone else with 409', async () => {
     await registerAndLogin('profile-taken@example.com', 'Taken');
     const cookie = await registerAndLogin('profile-wants-taken@example.com', 'Wants Taken');

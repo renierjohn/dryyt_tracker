@@ -1,0 +1,105 @@
+// CKEditor inside the M3 shell, plus rendered rich text (RichText.tsx, which
+// also pulls in CKEditor's own content stylesheet under .ck-content).
+.m3-shell {
+  .rich-text-editor {
+    --ck-color-base-border: var(--m3-outline);
+    --ck-color-focus-border: var(--m3-primary);
+    --ck-border-radius: 4px;
+    --ck-font-face: var(--sans);
+
+    .ck.ck-editor__main > .ck-editor__editable {
+      min-height: 160px;
+      font-size: 16px;
+      color: var(--m3-on-surface);
+    }
+  }
+
+  // Rendered content: CKEditor's styles, tightened for table cells and cards.
+  .rich-text.ck-content {
+    font-family: var(--sans);
+    font-size: inherit;
+    line-height: 1.5;
+    color: inherit;
+    word-break: break-word;
+
+    > :first-child {
+      margin-top: 0;
+    }
+
+    > :last-child {
+      margin-bottom: 0;
+    }
+
+    p,
+    ul,
+    ol,
+    blockquote,
+    pre,
+    figure {
+      margin-block: 0 8px;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4 {
+      margin: 0 0 8px;
+      font-family: var(--heading);
+      font-weight: 500;
+      letter-spacing: 0;
+      color: var(--m3-on-surface);
+    }
+
+    h1 {
+      font-size: 1.5em;
+    }
+
+    h2 {
+      font-size: 1.3em;
+    }
+
+    h3 {
+      font-size: 1.15em;
+    }
+
+    h4 {
+      font-size: 1em;
+    }
+
+    a {
+      color: var(--m3-primary);
+    }
+
+    code {
+      display: inline;
+      padding: 1px 4px;
+      font-size: 0.9em;
+      background: var(--code-bg);
+    }
+
+    pre code {
+      padding: 0;
+      background: none;
+    }
+
+    img {
+      max-width: 100%;
+      height: auto;
+    }
+
+    .table {
+      margin-inline: 0;
+    }
+  }
+}
+
+// Clamped plain-text preview (RichText with `lines`); line count set inline.
+.rich-text-preview {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-width: 160px;
+  max-width: 360px;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}

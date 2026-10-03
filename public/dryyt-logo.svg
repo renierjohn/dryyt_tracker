@@ -1,0 +1,8 @@
+<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle for D - larger, less padding -->
+  <circle cx="60" cy="60" r="45" fill="#3B82F6"/>
+  <!-- Styled D letter -->
+  <text x="60" y="75" font-family="Arial, sans-serif" font-size="36" font-weight="bold" fill="#FFFFFF" text-anchor="middle">D</text>
+  <!-- Accent dot -->
+  <circle cx="88" cy="42" r="5" fill="#FFFFFF"/>
+</svg>

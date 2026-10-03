@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { AuthUser } from '../lib/useCurrentUser';
 import { apiFetch, ApiError } from '../lib/api';
-import { canSendAlerts } from '../lib/permissions';
+import { canSendAlerts, isCustomer } from '../lib/permissions';
 import AlertEditor, { type AlertFormValues } from '../components/AlertEditor';
 import '../assets/sass/dashboard.scss';
 
@@ -58,6 +58,7 @@ function AvatarSection({ user, refresh }: { user: AuthUser; refresh: () => Promi
 function ProfileForm({ user, refresh }: { user: AuthUser; refresh: () => Promise<void> }) {
   const [displayName, setDisplayName] = useState(user.display_name);
   const [email, setEmail] = useState(user.email);
+  const [contactNumber, setContactNumber] = useState(user.contact_number ?? '');
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -66,7 +67,10 @@ function ProfileForm({ user, refresh }: { user: AuthUser; refresh: () => Promise
     setError(null);
     setSaved(false);
     try {
-      await apiFetch('/profile', { method: 'PUT', body: JSON.stringify({ display_name: displayName, email }) });
+      await apiFetch('/profile', {
+        method: 'PUT',
+        body: JSON.stringify({ display_name: displayName, email, contact_number: contactNumber }),
+      });
       await refresh();
       setSaved(true);
     } catch (err) {
@@ -87,6 +91,16 @@ function ProfileForm({ user, refresh }: { user: AuthUser; refresh: () => Promise
         <label>
           Email
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        </label>
+        <label>
+          Contact number
+          <input
+            type="tel"
+            value={contactNumber}
+            onChange={(e) => setContactNumber(e.target.value)}
+            placeholder="e.g. +63 912 345 6789"
+            autoComplete="tel"
+          />
         </label>
         <button className="dashboard__button" type="submit">Save profile</button>
       </form>
@@ -203,7 +217,12 @@ export function AlertsPanel({ user }: { user: AuthUser }) {
       <h3>Your alerts</h3>
       <ul className="dashboard__alert-list">
         {alerts.map((alert) => (
-          <li key={alert.id} className="dashboard__alert-item">
+          // Customers see the alert formatted by type (as on the public page),
+          // without the raw [type/visibility] tag.
+          <li
+            key={alert.id}
+            className={isCustomer(user) ? `m3-alert m3-alert--${alert.type}` : 'dashboard__alert-item'}
+          >
             {canSendAlerts(user) && editingId === alert.id ? (
               <AlertEditor
                 initial={{ type: alert.type, visibility: alert.visibility, body_html: alert.body_html }}
@@ -212,7 +231,9 @@ export function AlertsPanel({ user }: { user: AuthUser }) {
               />
             ) : (
               <>
-                <span className="dashboard__alert-tag">[{alert.type}/{alert.visibility}]</span>
+                {!isCustomer(user) && (
+                  <span className="dashboard__alert-tag">[{alert.type}/{alert.visibility}]</span>
+                )}
                 <div dangerouslySetInnerHTML={{ __html: alert.body_html }} />
                 <div className="dashboard__alert-actions">
                   {canSendAlerts(user) && (

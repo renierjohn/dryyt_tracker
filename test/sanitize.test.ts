@@ -243,3 +243,60 @@ describe('sanitizeHtml', () => {
     });
   });
 });
+
+describe("sanitizeHtml(html, 'rich')", () => {
+  const rich = (html: string) => sanitizeHtml(html, 'rich');
+
+  it('keeps headings, tables, code blocks and extra inline styles', async () => {
+    const html =
+      '<h2>Title</h2><p><u>u</u><s>s</s><sub>1</sub><sup>2</sup><code>c</code></p>' +
+      '<pre><code class="language-plaintext">x</code></pre><blockquote><p>q</p></blockquote><hr>' +
+      '<figure class="table"><table><tbody><tr><td colspan="2">a</td></tr></tbody></table></figure>';
+    expect(await rich(html)).toBe(html);
+  });
+
+  it('keeps allowlisted inline styles and drops the rest', async () => {
+    const out = await rich(
+      `<p style="text-align:center;color:hsl(0, 75%, 60%);position:fixed;font-family:'Courier New', monospace">x</p>`,
+    );
+    expect(out).toBe(`<p style="text-align:center;color:hsl(0, 75%, 60%);font-family:'Courier New', monospace">x</p>`);
+  });
+
+  it('drops style values that load resources or escape the attribute', async () => {
+    expect(await rich('<span style="background-color:url(https://x.test/a.png)">x</span>')).toBe('<span>x</span>');
+    expect(await rich('<span style="color:red&quot; onmouseover=&quot;alert(1)">x</span>')).toBe('<span>x</span>');
+    expect(await rich('<span style="width:expression(alert(1))">x</span>')).toBe('<span>x</span>');
+  });
+
+  it("keeps CKEditor's content classes but not arbitrary ones", async () => {
+    expect(await rich('<mark class="marker-yellow m3-banner">x</mark>')).toBe('<mark class="marker-yellow">x</mark>');
+    expect(await rich('<span class="evil">x</span>')).toBe('<span>x</span>');
+  });
+
+  it('keeps https images, drops data:/javascript: ones and non-numeric sizes', async () => {
+    expect(await rich('<img src="https://example.com/a.png" alt="A" width="100" height="x">')).toBe(
+      '<img src="https://example.com/a.png" alt="A" width="100">',
+    );
+    expect(await rich('<p>a<img src="data:image/png;base64,AAAA">b</p>')).toBe('<p>ab</p>');
+    expect(await rich('<p>a<img src="javascript:alert(1)">b</p>')).toBe('<p>ab</p>');
+  });
+
+  it('only keeps disabled checkbox inputs (todo lists)', async () => {
+    expect(await rich('<input type="checkbox" checked="checked">')).toBe('<input type="checkbox" checked="checked" disabled="">');
+    expect(await rich('<p>a<input type="text" value="x">b</p>')).toBe('<p>ab</p>');
+  });
+
+  it('forces rel=noopener on links that open a new tab', async () => {
+    expect(await rich('<a href="https://x.test" target="_top" rel="opener">x</a>')).toBe(
+      '<a href="https://x.test" target="_blank" rel="noopener noreferrer">x</a>',
+    );
+  });
+
+  it('still drops scripts and event handlers', async () => {
+    expect(await rich('<h2 onclick="alert(1)">t</h2><script>alert(1)</script>')).toBe('<h2>t</h2>');
+  });
+
+  it('basic profile is unchanged: rich-only tags are unwrapped', async () => {
+    expect(await sanitizeHtml('<h2 style="color:red">t</h2>')).toBe('t');
+  });
+});

@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch, ApiError } from '../lib/api';
+import AppShell from '../components/AppShell';
 import '../assets/sass/auth-form.scss';
 
 export default function Login({ onLoggedIn }: { onLoggedIn: () => Promise<void> }) {
@@ -22,21 +23,23 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => Promise<void> 
   }
 
   return (
-    <form className="auth-form" onSubmit={handleSubmit}>
-      <h1>Log in</h1>
-      {error && <p className="auth-form__error" role="alert">{error}</p>}
-      <label>
-        Email
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-      </label>
-      <label>
-        Password
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-      </label>
-      <button className="auth-form__button" type="submit">Log in</button>
-      <p className="auth-form__footer">
-        <a href="/forgot-password">Forgot password?</a> · <a href="/register">Register</a>
-      </p>
-    </form>
+    <AppShell active="login">
+      <form className="auth-form" onSubmit={handleSubmit}>
+        <h1>Log in</h1>
+        {error && <p className="auth-form__error" role="alert">{error}</p>}
+        <label>
+          Email
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        </label>
+        <label>
+          Password
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        </label>
+        <button className="auth-form__button" type="submit">Log in</button>
+        <p className="auth-form__footer">
+          <a href="/forgot-password">Forgot password?</a> · <a href="/register">Register</a>
+        </p>
+      </form>
+    </AppShell>
   );
 }

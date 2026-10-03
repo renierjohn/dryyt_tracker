@@ -20,3 +20,8 @@ export function canSendAlerts(user: AuthUser): boolean {
 export function isOwner(user: AuthUser): boolean {
   return user.role_name === 'owner';
 }
+
+// Plain 'user' role — an owner's customer. Sees only their own transactions.
+export function isCustomer(user: AuthUser): boolean {
+  return user.role_name === 'user';
+}

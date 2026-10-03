@@ -32,11 +32,12 @@ describe('POST /api/owner/users', () => {
     const res = await req(
       'POST',
       '/api/owner/users',
-      { email: 'child@example.com', password: 'password123', display_name: 'Child' },
+      { email: 'child@example.com', password: 'password123', display_name: 'Child', contact_number: '09123456789' },
       ownerCookie,
     );
     expect(res.status).toBe(201);
-    const body = (await res.json()) as { user: { email: string; display_name: string } };
+    const body = (await res.json()) as { user: { email: string; display_name: string; contact_number: string } };
+    expect(body.user.contact_number).toBe('09123456789');
     expect(body.user.email).toBe('child@example.com');
     expect(body.user.display_name).toBe('Child');
   });
@@ -76,5 +77,41 @@ describe('GET /api/owner/users', () => {
     const emails = body.users.map((u) => u.email);
     expect(emails).toContain('a-child@example.com');
     expect(emails).not.toContain('b-child@example.com');
+  });
+});
+
+describe('PUT/DELETE /api/owner/users/:id', () => {
+  async function setup(prefix: string) {
+    const ownerRoleId = await getOwnerRoleId();
+    const ownerCookie = await createUserWithRoleAndLogin(`${prefix}-owner@example.com`, ownerRoleId, 'Owner');
+    const res = await req('POST', '/api/owner/users', { email: `${prefix}-child@example.com`, password: 'password123', display_name: 'Child' }, ownerCookie);
+    const { user } = (await res.json()) as { user: { id: number } };
+    return { ownerCookie, childId: user.id };
+  }
+
+  it('edits a child user', async () => {
+    const { ownerCookie, childId } = await setup('owner-edit');
+    const res = await req('PUT', `/api/owner/users/${childId}`, {
+      email: 'owner-edit-new@example.com', display_name: 'Renamed', contact_number: '+63 912 345 6789',
+    }, ownerCookie);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { user: { email: string; display_name: string; contact_number: string } };
+    expect(body.user).toMatchObject({ email: 'owner-edit-new@example.com', display_name: 'Renamed', contact_number: '+63 912 345 6789' });
+  });
+
+  it('delete deactivates the child user', async () => {
+    const { ownerCookie, childId } = await setup('owner-del');
+    expect((await req('DELETE', `/api/owner/users/${childId}`, undefined, ownerCookie)).status).toBe(200);
+    const list = (await (await req('GET', '/api/owner/users', undefined, ownerCookie)).json()) as {
+      users: Array<{ id: number; is_active: number }>;
+    };
+    expect(list.users.find((u) => u.id === childId)?.is_active).toBe(0);
+  });
+
+  it("returns 404 for another owner's user", async () => {
+    const { childId } = await setup('owner-other-a');
+    const otherCookie = await createUserWithRoleAndLogin('owner-other-b@example.com', await getOwnerRoleId(), 'OwnerB');
+    expect((await req('PUT', `/api/owner/users/${childId}`, { display_name: 'X' }, otherCookie)).status).toBe(404);
+    expect((await req('DELETE', `/api/owner/users/${childId}`, undefined, otherCookie)).status).toBe(404);
   });
 });

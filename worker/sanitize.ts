@@ -24,6 +24,47 @@ const ALLOWED_ATTRS: Record<string, Set<string>> = {
   a: new Set(['href', 'title']),
 };
 
+// 'rich' profile: everything the full (open-source) CKEditor toolbar emits for
+// transaction descriptions — headings, extra inline styles, tables, images by
+// URL, code blocks, todo lists, alignment/indent/font styles. Alerts keep the
+// 'basic' profile above.
+const RICH_TAGS = new Set([
+  ...ALLOWED_TAGS,
+  'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  'u', 's', 'sub', 'sup', 'code', 'pre', 'blockquote', 'hr', 'span', 'mark',
+  'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'caption', 'colgroup', 'col',
+  'figure', 'figcaption', 'img', 'label', 'input',
+]);
+// `style` and `class` are allowed on every rich tag but each value is filtered
+// (sanitizeStyle / sanitizeClass); the per-tag sets below are additional.
+const RICH_ATTRS: Record<string, Set<string>> = {
+  a: new Set(['href', 'title', 'target', 'rel']),
+  img: new Set(['src', 'alt', 'width', 'height']),
+  ol: new Set(['start', 'reversed']),
+  td: new Set(['colspan', 'rowspan']),
+  th: new Set(['colspan', 'rowspan', 'scope']),
+  col: new Set(['span']),
+  input: new Set(['type', 'checked', 'disabled']),
+};
+
+// CSS properties CKEditor writes inline (font color/size/family, alignment,
+// indent, list style, table/cell/image properties).
+const ALLOWED_STYLE_PROPS = new Set([
+  'color', 'background-color', 'font-size', 'font-family', 'font-weight', 'font-style',
+  'text-align', 'text-decoration', 'vertical-align', 'margin-left', 'margin-right', 'padding', 'padding-left',
+  'list-style-type', 'width', 'height', 'min-width', 'aspect-ratio', 'float',
+  'border', 'border-color', 'border-style', 'border-width', 'border-collapse', 'border-spacing',
+]);
+// Anything that can fetch, execute, or break out of the attribute.
+const FORBIDDEN_STYLE_VALUE = /url\s*\(|expression|javascript|behavior|binding|@import|\/\*|[<>"\\&{};]/i;
+
+// CKEditor's own content classes (font size presets, highlight markers,
+// image/table/todo-list/code-block wrappers). Anything else is dropped so stored
+// content can't borrow the app's own class names.
+const ALLOWED_CLASS = /^(text-(tiny|small|big|huge)|marker-(yellow|green|pink|blue)|pen-(red|green)|image(_resized|-style-[a-z-]+|-inline)?|table|todo-list(__label(__description)?)?|language-[a-z0-9-]+|ck-[a-z0-9-]+)$/;
+
+export type SanitizeProfile = 'basic' | 'rich';
+
 // Only these URL schemes are allowed in a sanitized href. Everything else — javascript:,
 // data:, vbscript:, or any scheme we don't recognize — gets the href attribute stripped.
 // A value with no scheme at all (a relative path/fragment link) is allowed through.
@@ -125,7 +166,41 @@ function sanitizeHref(rawHref: string): string | null {
   return decoded;
 }
 
-export async function sanitizeHtml(html: string): Promise<string> {
+// Keeps only allowlisted `prop: value` declarations. Values are entity-decoded
+// first (getAttribute returns raw source text) and written back decoded, so the
+// forbidden-character check also guarantees nothing can close the attribute.
+function sanitizeStyle(raw: string): string | null {
+  const { value, resolved } = decodeHtmlEntities(raw);
+  if (!resolved || UNRESOLVED_ENTITY_RESIDUE.test(value)) return null;
+  const kept: string[] = [];
+  for (const declaration of value.split(';')) {
+    const colon = declaration.indexOf(':');
+    if (colon < 0) continue;
+    const prop = declaration.slice(0, colon).trim().toLowerCase();
+    const val = declaration.slice(colon + 1).trim();
+    if (!ALLOWED_STYLE_PROPS.has(prop) || !val || FORBIDDEN_STYLE_VALUE.test(val)) continue;
+    kept.push(`${prop}:${val}`);
+  }
+  return kept.length ? kept.join(';') : null;
+}
+
+function sanitizeClass(raw: string): string | null {
+  const kept = raw.split(/\s+/).filter((c) => ALLOWED_CLASS.test(c));
+  return kept.length ? kept.join(' ') : null;
+}
+
+// An image source must be an absolute http(s) URL — no data:, javascript:, etc.
+function sanitizeImageSrc(raw: string): string | null {
+  const safe = sanitizeHref(raw);
+  if (safe === null || /["<>]/.test(safe)) return null;
+  return /^https?:\/\//i.test(safe.trim()) ? safe.trim() : null;
+}
+
+export async function sanitizeHtml(html: string, profile: SanitizeProfile = 'basic'): Promise<string> {
+  const rich = profile === 'rich';
+  const allowedTags = rich ? RICH_TAGS : ALLOWED_TAGS;
+  const attrsByTag = rich ? RICH_ATTRS : ALLOWED_ATTRS;
+
   const rewriter = new HTMLRewriter().on('*', {
     element(el) {
       const tag = el.tagName.toLowerCase();
@@ -135,15 +210,59 @@ export async function sanitizeHtml(html: string): Promise<string> {
         return;
       }
 
-      if (!ALLOWED_TAGS.has(tag)) {
+      if (!allowedTags.has(tag)) {
         el.removeAndKeepContent();
         return;
       }
 
-      const allowedAttrs = ALLOWED_ATTRS[tag] ?? new Set<string>();
+      // Todo-list checkboxes only — never a live form control.
+      if (tag === 'input' && el.getAttribute('type')?.toLowerCase() !== 'checkbox') {
+        el.remove();
+        return;
+      }
+
+      const allowedAttrs = attrsByTag[tag] ?? new Set<string>();
       for (const [name] of [...el.attributes]) {
-        if (!allowedAttrs.has(name)) {
+        if (rich && name === 'style') {
+          const style = sanitizeStyle(el.getAttribute('style') ?? '');
+          if (style) el.setAttribute('style', style);
+          else el.removeAttribute('style');
+        } else if (rich && name === 'class') {
+          const cls = sanitizeClass(el.getAttribute('class') ?? '');
+          if (cls) el.setAttribute('class', cls);
+          else el.removeAttribute('class');
+        } else if (!allowedAttrs.has(name)) {
           el.removeAttribute(name);
+        }
+      }
+
+      if (rich) {
+        // Numeric-only attributes.
+        for (const name of ['width', 'height', 'colspan', 'rowspan', 'span', 'start']) {
+          const v = el.getAttribute(name);
+          if (v !== null && !/^\d{1,5}$/.test(v)) el.removeAttribute(name);
+        }
+        if (tag === 'input') {
+          el.setAttribute('disabled', '');
+        }
+        if (tag === 'img') {
+          const src = sanitizeImageSrc(el.getAttribute('src') ?? '');
+          if (src === null) {
+            el.remove();
+            return;
+          }
+          el.setAttribute('src', src);
+          const alt = el.getAttribute('alt');
+          if (alt !== null && /["<>]/.test(alt)) el.setAttribute('alt', '');
+        }
+        if (tag === 'a') {
+          // Links opening a new tab never get a handle on this window.
+          if (el.getAttribute('target') !== null) {
+            el.setAttribute('target', '_blank');
+            el.setAttribute('rel', 'noopener noreferrer');
+          } else {
+            el.removeAttribute('rel');
+          }
         }
       }
 

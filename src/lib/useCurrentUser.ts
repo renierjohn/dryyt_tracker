@@ -10,6 +10,7 @@ export interface AuthUser {
   permissions: string[];
   avatar_key: string | null;
   parent_id: number | null;
+  contact_number: string | null;
 }
 
 export interface Masquerade {

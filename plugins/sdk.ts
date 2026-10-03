@@ -6,5 +6,13 @@
 export * from './types';
 export * from './slots';
 export { apiFetch, ApiError } from '../src/lib/api';
-export { useCurrentUser } from '../src/lib/useCurrentUser';
+export { useCurrentUser, type AuthUser } from '../src/lib/useCurrentUser';
+export { useSession } from '../src/lib/session';
+export { default as AppShell, Icon } from '../src/components/AppShell';
 export { hasPermission } from '../src/lib/permissions';
+export { default as RichTextEditor, type RichTextEditorInstance } from '../src/components/RichTextEditor';
+export { default as RichText } from '../src/components/RichText';
+export { CONTACT_ERROR, isInvalidContact } from '../src/lib/contact';
+export { useColorbox } from '../src/lib/useColorbox';
+export { default as StoreInfo } from '../src/components/StoreInfo';
+export type { StoreDetails } from '../src/lib/store';

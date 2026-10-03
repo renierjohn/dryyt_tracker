@@ -20,6 +20,10 @@ migrations_dir = "./migrations"
 binding = "AVATARS"
 bucket_name = "<YOUR_R2_BUCKET_NAME>"
 
+[[r2_buckets]]
+binding = "TRANSACTION_IMAGES"
+bucket_name = "<YOUR_TRANSACTION_IMAGES_BUCKET_NAME>"
+
 [vars]
 # "true" enables the forgot-password dev-mode stand-in (no email service yet):
 # the reset link is returned directly in the API response instead of emailed.
@@ -54,6 +58,10 @@ migrations_dir = "./migrations"
 [[env.production.r2_buckets]]
 binding = "AVATARS"
 bucket_name = "<YOUR_R2_BUCKET_NAME>"
+
+[[env.production.r2_buckets]]
+binding = "TRANSACTION_IMAGES"
+bucket_name = "<YOUR_TRANSACTION_IMAGES_BUCKET_NAME>"
 
 [env.production.vars]
 DEV_MODE = "false"

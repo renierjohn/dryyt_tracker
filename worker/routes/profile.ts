@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { hashPassword, verifyPassword, generateToken } from '../crypto';
 import { getUserByEmail, getUserById, updateUserProfile, updatePasswordHash, deleteSessionsForUser, setUserAvatarKey } from '../db';
 import { requireAuth, createAndSetSession } from '../middleware/auth';
-import { isValidEmail, toPublicUser } from '../util';
+import { isValidEmail, isValidContactNumber, toPublicUser } from '../util';
 import { getRoleById } from '../db';
 import { detectImageMimeType } from '../image';
 import type { AppBindings } from '../types';
@@ -23,6 +23,13 @@ profileRoutes.put('/', async (c) => {
   const body = await c.req.json().catch(() => null);
   const displayName = typeof body?.display_name === 'string' ? body.display_name.trim() : undefined;
   const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : undefined;
+  // Optional: an empty string clears it.
+  const contactNumber =
+    typeof body?.contact_number === 'string' ? body.contact_number.trim() || null : undefined;
+
+  if (contactNumber && !isValidContactNumber(contactNumber)) {
+    return c.json({ error: 'invalid_contact_number' }, 400);
+  }
 
   if (email !== undefined) {
     if (!isValidEmail(email)) return c.json({ error: 'invalid_email' }, 400);
@@ -37,7 +44,7 @@ profileRoutes.put('/', async (c) => {
 
   let updated;
   try {
-    updated = await updateUserProfile(c.env.DB, authUser.id, { displayName, email });
+    updated = await updateUserProfile(c.env.DB, authUser.id, { displayName, email, contactNumber });
   } catch (err) {
     if (err instanceof Error && err.message.includes('UNIQUE')) {
       return c.json({ error: 'email_taken' }, 409);

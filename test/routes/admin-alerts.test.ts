@@ -1,6 +1,6 @@
 import { SELF } from 'cloudflare:test';
 import { describe, it, expect } from 'vitest';
-import { createUserWithRoleAndLogin, getAdminRoleId } from '../helpers';
+import { createUserWithRoleAndLogin, getAdminRoleId, getOwnerRoleId } from '../helpers';
 
 function req(method: string, path: string, body?: unknown, cookie?: string) {
   return SELF.fetch(`https://example.com${path}`, {
@@ -64,5 +64,25 @@ describe('POST /api/admin/users/:id/alerts', () => {
     expect(res.status).toBe(404);
     const body = (await res.json()) as { error: string };
     expect(body.error).toBe('not_found');
+  });
+});
+
+describe('GET /api/admin/alert-targets', () => {
+  it('gives an owner only their own active customers', async () => {
+    const owner = await createUserWithRoleAndLogin('alert-targets-owner@example.com', await getOwnerRoleId(), 'Owner');
+    await SELF.fetch('https://example.com/api/owner/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: owner },
+      body: JSON.stringify({ email: 'alert-targets-cust@example.com', password: 'password123', display_name: 'Cust' }),
+    });
+    const res = await SELF.fetch('https://example.com/api/admin/alert-targets', { headers: { Cookie: owner } });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { users: Array<{ email: string; display_name: string }> };
+    expect(body.users).toEqual([expect.objectContaining({ email: 'alert-targets-cust@example.com', display_name: 'Cust' })]);
+  });
+
+  it('is forbidden for a plain user', async () => {
+    const plain = await createUserWithRoleAndLogin('alert-targets-plain@example.com', 2, 'Plain');
+    expect((await SELF.fetch('https://example.com/api/admin/alert-targets', { headers: { Cookie: plain } })).status).toBe(403);
   });
 });

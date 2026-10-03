@@ -12,7 +12,8 @@
     }
   ],
   "r2_buckets": [
-    { "binding": "AVATARS", "bucket_name": "dryyt-tracker-avatars" }
+    { "binding": "AVATARS", "bucket_name": "dryyt-tracker-avatars" },
+    { "binding": "TRANSACTION_IMAGES", "bucket_name": "dryyt-tracker-transaction-images" }
   ],
   "vars": {
     "DEV_MODE": "false"
@@ -34,7 +35,8 @@
         }
       ],
       "r2_buckets": [
-        { "binding": "AVATARS", "bucket_name": "dryyt-tracker-avatars" }
+        { "binding": "AVATARS", "bucket_name": "dryyt-tracker-avatars" },
+    { "binding": "TRANSACTION_IMAGES", "bucket_name": "dryyt-tracker-transaction-images" }
       ],
       "vars": {
         "DEV_MODE": "false"

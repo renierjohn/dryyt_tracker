@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { CKEditor } from '@ckeditor/ckeditor5-react';
 import { ClassicEditor, Essentials, Paragraph, Bold, Italic, Link, List } from 'ckeditor5';
 import 'ckeditor5/ckeditor5.css';
+import { EDITOR_NAME_TRANSLATIONS } from '../lib/editorTranslations';
 import '../assets/sass/alert-editor.scss';
 
 export interface AlertFormValues {
@@ -60,6 +61,7 @@ export default function AlertEditor({
         data={bodyHtml}
         config={{
           licenseKey: 'GPL',
+          translations: EDITOR_NAME_TRANSLATIONS,
           plugins: [Essentials, Paragraph, Bold, Italic, Link, List],
           toolbar: ['bold', 'italic', 'link', 'bulletedList', 'numberedList'],
         }}

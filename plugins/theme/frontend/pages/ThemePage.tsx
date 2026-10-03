@@ -1,10 +1,23 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { apiFetch, ApiError, useCurrentUser, hasPermission } from '../../../sdk';
+import { apiFetch, ApiError, useSession, AppShell } from '../../../sdk';
 import { FLAVORS, FLAVOR_LABELS, type Flavor } from '../../manifest';
 
+// Light-mode accents from theme.scss / _variables.scss — static here because the
+// live --accent only reflects the flavor currently applied to <html>.
+const SWATCHES: Record<Flavor, string> = {
+  default: '#aa3bff',
+  ocean: '#0ea5e9',
+  sunset: '#f97316',
+  forest: '#16a34a',
+  midnight: '#6366f1',
+};
+
+function applyFlavor(flavor: Flavor) {
+  document.documentElement.dataset.theme = flavor;
+}
+
 export default function ThemePage() {
-  const { user } = useCurrentUser();
+  const { user, refresh } = useSession();
   const [flavor, setFlavor] = useState<Flavor | null>(null);
   const [editable, setEditable] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -29,7 +42,7 @@ export default function ThemePage() {
     setFlavor(next);
     setSaved(false);
     setError(null);
-    document.documentElement.dataset.theme = next;
+    applyFlavor(next);
     try {
       await apiFetch('/plugins/theme/me', { method: 'PUT', body: JSON.stringify({ flavor: next }) });
       setSaved(true);
@@ -39,33 +52,45 @@ export default function ThemePage() {
   }
 
   return (
-    <div style={{ maxWidth: 480, margin: '64px auto', padding: '0 20px', textAlign: 'center' }}>
-      <h1>Theme</h1>
-      {error && <p role="alert">{error}</p>}
-      {flavor === null ? (
-        <p>Loading…</p>
-      ) : editable ? (
-        <>
-          <p>Pick a flavor — it applies to your account and every user you've created.</p>
-          <select value={flavor} onChange={(e) => handleChange(e.target.value as Flavor)}>
-            {FLAVORS.map((f) => (
-              <option key={f} value={f}>{FLAVOR_LABELS[f]}</option>
-            ))}
-          </select>
-          {saved && <p>Saved.</p>}
-        </>
-      ) : (
-        <p>
-          Your theme (<strong>{FLAVOR_LABELS[flavor]}</strong>) is set by your account owner.
-        </p>
-      )}
-
-      <nav className="tab-bar">
-        <Link className="tab" to="/dashboard">Dashboard</Link>
-        {user && hasPermission(user, 'manage_users') && (
-          <Link className="tab" to="/plugins/workflow">Track</Link>
-        )}
-      </nav>
-    </div>
+    <AppShell active="dashboard" user={user} refresh={refresh} contentClassName="m3-page">
+      <h1 className="m3-headline">Theme</h1>
+      <section>
+        {error && <p className="m3-banner m3-banner--error" role="alert">{error}</p>}
+        {saved && <p className="m3-banner" role="status">Saved.</p>}
+        <div className="m3-card">
+          {flavor === null ? (
+            <p className="m3-supporting">Loading…</p>
+          ) : editable ? (
+            <>
+              <h2 className="m3-card__title">Flavor</h2>
+              <p className="m3-supporting">Applies to your account and every user you've created.</p>
+              <fieldset className="m3-choice-grid">
+                <legend className="visually-hidden">Flavor</legend>
+                {FLAVORS.map((f) => (
+                  <label key={f} className="m3-choice">
+                    <input
+                      type="radio"
+                      name="flavor"
+                      value={f}
+                      checked={flavor === f}
+                      onChange={() => handleChange(f)}
+                    />
+                    <span className="m3-swatch" style={{ background: SWATCHES[f] }} aria-hidden="true" />
+                    {FLAVOR_LABELS[f]}
+                  </label>
+                ))}
+              </fieldset>
+            </>
+          ) : (
+            <>
+              <h2 className="m3-card__title">Flavor</h2>
+              <p className="m3-supporting">
+                Your theme (<strong>{FLAVOR_LABELS[flavor]}</strong>) is set by your account owner.
+              </p>
+            </>
+          )}
+        </div>
+      </section>
+    </AppShell>
   );
 }

@@ -154,6 +154,12 @@
     color: #15803d;
   }
 
+  // Wide tables scroll inside their section instead of overflowing the page.
+  &__table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
   &__table {
     width: 100%;
     border-collapse: collapse;
@@ -232,5 +238,344 @@
       outline: 2px solid var(--accent);
       outline-offset: 1px;
     }
+  }
+}
+
+// Dashboard page inside the M3 app shell (m3.scss) — mirrors the homepage's
+// look. Scoped under .m3-shell so plugin pages that reuse the .dashboard__*
+// classes outside the shell keep the plain styles above.
+.m3-shell {
+  // Doubled class so this beats .m3-shell__content regardless of CSS order.
+  .dashboard__content.m3-shell__content {
+    max-width: none;
+    margin: 0;
+    padding: 8px 16px calc(104px + env(safe-area-inset-bottom));
+
+    @media (min-width: 600px) {
+      padding: 8px 24px 32px;
+    }
+
+    // Expanded: tabbed panel and shortcuts side by side, centered.
+    @media (min-width: 1200px) {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 320px);
+      column-gap: 24px;
+      align-content: start;
+      align-items: start;
+      width: 100%;
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 8px 32px 32px;
+    }
+  }
+
+  .dashboard__headline {
+    grid-column: 1 / -1;
+    margin: 8px 4px 20px;
+    font-family: var(--m3-font);
+    font-size: 32px;
+    font-weight: 400;
+    line-height: 40px;
+    letter-spacing: -0.25px;
+    color: var(--m3-on-surface);
+  }
+
+  .dashboard__main {
+    min-width: 0;
+  }
+
+  // Segmented-style section switcher.
+  .dashboard__tabs {
+    display: inline-flex;
+    gap: 0;
+    margin-bottom: 16px;
+    border: 1px solid var(--m3-outline);
+    border-radius: 20px;
+    overflow: hidden;
+
+    // Compact: span the width, segments share it evenly.
+    @media (max-width: 599px) {
+      display: flex;
+
+      .dashboard__tab {
+        flex: 1;
+        padding: 0 8px;
+      }
+    }
+  }
+
+  .dashboard__tab {
+    height: 40px;
+    padding: 0 16px;
+    margin: 0;
+    font: 500 14px/20px var(--m3-font);
+    letter-spacing: 0.1px;
+    color: var(--m3-on-surface);
+    border: 0;
+    border-radius: 0;
+
+    & + .dashboard__tab {
+      border-left: 1px solid var(--m3-outline);
+    }
+
+    &:hover {
+      background: color-mix(in srgb, var(--m3-on-surface) 8%, transparent);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--m3-primary);
+      outline-offset: -2px;
+    }
+
+    &--active,
+    &--active:hover {
+      background: var(--m3-secondary-container);
+    }
+  }
+
+  .dashboard__section {
+    padding: 20px;
+    margin-bottom: 16px;
+    border: 0;
+    border-radius: 28px;
+    background: var(--m3-surface-container-high);
+
+    h2 {
+      margin: 0 0 16px;
+      font: 500 16px/24px var(--m3-font);
+      letter-spacing: 0.15px;
+      color: var(--m3-on-surface);
+    }
+
+    h3 {
+      font: 500 14px/20px var(--m3-font);
+      color: var(--m3-primary);
+    }
+  }
+
+  // <details> section, collapsed by default; the summary acts as its heading.
+  .dashboard__collapsible {
+    > summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      list-style: none;
+      font: 500 16px/24px var(--m3-font);
+      letter-spacing: 0.15px;
+      color: var(--m3-on-surface);
+
+      &::-webkit-details-marker {
+        display: none;
+      }
+
+      &::after {
+        content: '';
+        width: 8px;
+        height: 8px;
+        border-right: 2px solid currentColor;
+        border-bottom: 2px solid currentColor;
+        transform: rotate(45deg);
+        transition: transform 0.15s;
+      }
+
+      &:focus-visible {
+        outline: 2px solid var(--m3-primary);
+        outline-offset: 4px;
+        border-radius: 4px;
+      }
+    }
+
+    &[open] > summary {
+      margin-bottom: 16px;
+
+      &::after {
+        transform: rotate(-135deg);
+      }
+    }
+  }
+
+  .dashboard__form {
+    gap: 12px;
+
+    label {
+      gap: 4px;
+      font-size: 12px;
+      color: var(--m3-on-surface-variant);
+    }
+
+    input,
+    select,
+    textarea {
+      height: 48px;
+      padding: 0 14px;
+      font: 400 16px var(--m3-font);
+      color: var(--m3-on-surface);
+      background: transparent;
+      border: 1px solid var(--m3-outline);
+      border-radius: 4px;
+
+      &:hover {
+        border-color: var(--m3-on-surface);
+      }
+
+      &:focus,
+      &:focus-visible {
+        outline: none;
+        border: 2px solid var(--m3-primary);
+        padding: 0 13px;
+      }
+    }
+
+    textarea {
+      height: auto;
+      padding: 12px 14px;
+    }
+  }
+
+  // Filled button.
+  .dashboard__button {
+    height: 40px;
+    padding: 0 24px;
+    font: 500 14px/20px var(--m3-font);
+    letter-spacing: 0.1px;
+    color: var(--m3-on-primary);
+    background: var(--m3-primary);
+    border: 0;
+    border-radius: 20px;
+    transition:
+      box-shadow 0.15s,
+      filter 0.15s;
+
+    &:hover:not(:disabled) {
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+      filter: brightness(1.08);
+    }
+
+    &:active:not(:disabled) {
+      filter: brightness(0.92);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--m3-primary);
+      outline-offset: 2px;
+    }
+  }
+
+  // Tonal variant for row actions (edit/delete) so they don't shout.
+  .dashboard__alert-actions .dashboard__button {
+    height: 32px;
+    padding: 0 16px;
+    color: var(--m3-on-surface);
+    background: var(--m3-secondary-container);
+  }
+
+  .dashboard__table {
+    th,
+    td {
+      padding: 12px;
+      border-bottom-color: color-mix(in srgb, var(--m3-outline) 40%, transparent);
+    }
+
+    th {
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      color: var(--m3-on-surface-variant);
+    }
+
+    td {
+      color: var(--m3-on-surface);
+    }
+  }
+
+  .dashboard__alert-item {
+    padding: 12px 16px;
+    border: 0;
+    border-radius: 16px;
+    background: var(--m3-surface);
+  }
+
+  .dashboard__alert-tag {
+    height: 24px;
+    align-items: center;
+    padding: 0 10px;
+    font-weight: 500;
+    color: var(--m3-on-surface);
+    background: var(--m3-secondary-container);
+    border-radius: 8px;
+  }
+
+  .dashboard__avatar img {
+    border: 0;
+  }
+
+  .dashboard__shortcuts {
+    margin-top: 12px;
+
+    @media (min-width: 1200px) {
+      margin-top: 56px; // line up with the first card under the tabs
+    }
+  }
+
+  .dashboard__section-title {
+    margin: 0 4px 8px;
+    font: 500 14px/20px var(--m3-font);
+    letter-spacing: 0.1px;
+    color: var(--m3-primary);
+  }
+
+  .dashboard__shortcut-list {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    list-style: none;
+    border-radius: 20px;
+    background: var(--m3-surface-container);
+
+    li + li {
+      border-top: 1px solid var(--border);
+    }
+  }
+
+  .dashboard__shortcut {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    min-height: 56px;
+    padding: 8px 16px;
+    color: var(--m3-on-surface-variant);
+    text-decoration: none;
+    transition: background 0.15s;
+
+    &:hover {
+      background: color-mix(in srgb, var(--m3-on-surface) 8%, transparent);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--m3-primary);
+      outline-offset: -2px;
+    }
+  }
+
+  .dashboard__shortcut-icon {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--m3-on-surface);
+    background: var(--m3-secondary-container);
+  }
+
+  .dashboard__shortcut-label {
+    flex: 1;
+    font-size: 16px;
+    line-height: 24px;
+    color: var(--m3-on-surface);
   }
 }

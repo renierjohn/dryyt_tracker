@@ -6,6 +6,9 @@ interface Owner {
   id: number;
   display_name: string;
   email: string;
+  contact_number: string | null;
+  address: string | null;
+  avatar_key: string | null;
 }
 
 export default function OwnersList() {
@@ -29,14 +32,27 @@ export default function OwnersList() {
 
   return (
     <section className="home__owners">
-      <div className="home__owner-cards">
+      <h2 className="home__section-title">Stores</h2>
+      <ul className="home__owner-list">
         {owners.map((o) => (
-          <Link className="home__owner-card" to={`/owner/${encodeURIComponent(o.display_name)}`} key={o.id}>
-            <h3>{o.display_name}</h3>
-            <p>{o.email}</p>
-          </Link>
+          <li key={o.id}>
+            <Link className="home__owner-item" to={`/owner/${encodeURIComponent(o.display_name)}`}>
+              {o.avatar_key ? (
+                <img className="home__avatar" src={`/api/avatars/${o.avatar_key}`} alt="" width={40} height={40} loading="lazy" />
+              ) : (
+                <span className="home__avatar" aria-hidden="true">{o.display_name.charAt(0).toUpperCase()}</span>
+              )}
+              <span className="home__owner-text">
+                <span className="home__owner-name">{o.display_name}</span>
+                {o.address && <span className="home__owner-meta">{o.address}</span>}
+                <span className="home__owner-meta">{o.email}</span>
+                {o.contact_number && <span className="home__owner-meta">{o.contact_number}</span>}
+              </span>
+              <span className="home__owner-visit" aria-hidden="true">Visit</span>
+            </Link>
+          </li>
         ))}
-      </div>
+      </ul>
     </section>
   );
 }

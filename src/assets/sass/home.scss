@@ -1,150 +1,281 @@
+// Homepage content, rendered inside the M3 app shell (m3.scss).
 .home {
-  width: 100%;
-  max-width: 480px;
-  margin: 96px auto 0;
-  padding: 32px;
-  box-sizing: border-box;
-  text-align: center;
-
-  @media (max-width: 640px) {
-    margin-top: 48px;
-    padding: 20px;
-  }
-
-  p {
-    color: var(--text);
-    margin-bottom: 16px;
-  }
-
-  &__header {
-    display: flex;
+  &__avatar {
+    display: inline-flex;
+    flex: none;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 32px;
-  }
-
-  &__brand {
-    font-family: var(--heading);
-    font-size: 20px;
-    font-weight: 600;
-    color: var(--text-h);
-  }
-
-  &__user {
-    font-size: 14px;
-    color: var(--text);
-  }
-
-  &__track-form {
-    display: flex;
-    gap: 8px;
-    align-items: flex-end;
     justify-content: center;
-    flex-wrap: wrap;
-    margin: 24px 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--m3-on-surface);
+    background: var(--m3-secondary-container);
+    object-fit: cover;
+  }
 
-    label {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      font-size: 14px;
-      color: var(--text);
-      text-align: left;
+  // Doubled class so this beats .m3-shell__content regardless of CSS order.
+  &__content.m3-shell__content {
+    // Expanded: track card and owners side by side, centered.
+    @media (min-width: 1200px) {
+      display: grid;
+      grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+      grid-template-rows: auto 1fr;
+      column-gap: 24px;
+      align-content: start;
+      align-items: start;
+      width: 100%;
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 8px 32px 32px;
     }
+  }
+
+  &__headline {
+    grid-column: 1 / -1;
+    margin: 8px 4px 20px;
+    font-family: var(--m3-font);
+    font-size: 32px;
+    font-weight: 400;
+    line-height: 40px;
+    letter-spacing: -0.25px;
+    color: var(--m3-on-surface);
+  }
+
+  &__track-card {
+    max-width: 560px;
+    padding: 20px;
+    border-radius: 28px;
+    background: var(--m3-surface-container-high);
+  }
+
+  &__card-title {
+    margin: 0 0 16px;
+    font-family: var(--m3-font);
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 24px;
+    letter-spacing: 0.15px;
+    color: var(--m3-on-surface);
+  }
+
+  &__track-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+
+  // Outlined text field with floating label.
+  &__field {
+    position: relative;
+    flex: 1;
+    min-width: 0;
 
     input {
-      font: inherit;
-      color: var(--text-h);
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 6px 10px;
+      width: 100%;
+      height: 56px;
+      padding: 0 16px;
+      font: 500 18px/1 var(--m3-font);
+      letter-spacing: 3px;
       text-transform: uppercase;
-
-      &:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: 1px;
-      }
-    }
-
-    button {
-      font: inherit;
-      color: var(--text-h);
-      background: var(--accent-bg);
-      border: 1px solid var(--accent-border);
-      border-radius: 6px;
-      padding: 7px 16px;
-      cursor: pointer;
-      transition: border-color 0.2s;
+      color: var(--m3-on-surface);
+      background: transparent;
+      border: 1px solid var(--m3-outline);
+      border-radius: 4px;
+      outline: none;
+      transition: border-color 0.15s;
 
       &:hover {
-        border-color: var(--accent);
+        border-color: var(--m3-on-surface);
       }
 
-      &:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: 1px;
+      &:focus {
+        border: 2px solid var(--m3-primary);
+        padding: 0 15px;
       }
     }
-  }
 
-  a:not(.home__owner-card):not(.tab) {
-    color: var(--accent);
-    font-size: 16px;
-    text-decoration: none;
+    label {
+      position: absolute;
+      top: 50%;
+      left: 12px;
+      padding: 0 4px;
+      font-size: 16px;
+      color: var(--m3-on-surface-variant);
+      background: var(--m3-surface-container-high);
+      transform: translateY(-50%);
+      transform-origin: left center;
+      pointer-events: none;
+      transition:
+        top 0.15s,
+        transform 0.15s,
+        color 0.15s;
+    }
 
-    &:hover {
-      text-decoration: underline;
+    input:focus + label,
+    input:not(:placeholder-shown) + label {
+      top: 0;
+      transform: translateY(-50%) scale(0.75);
+    }
+
+    input:focus + label {
+      color: var(--m3-primary);
     }
   }
 
-  &__owners {
-    margin-top: 32px;
-    text-align: left;
-  }
-
-  &__owner-cards {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
-
-    @media (max-width: 480px) {
-      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-    }
-  }
-
-  &__owner-card {
-    display: block;
-    min-width: 0;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px 16px;
-    color: inherit;
-    text-decoration: none;
-    overflow-wrap: break-word;
-    transition: border-color 0.2s;
+  &__fab {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    color: var(--m3-on-primary);
+    background: var(--m3-primary);
+    border: 0;
+    border-radius: 16px;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition:
+      box-shadow 0.15s,
+      filter 0.15s;
 
     &:hover {
-      border-color: var(--accent);
-      text-decoration: none;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      filter: brightness(1.08);
+    }
+
+    &:active {
+      filter: brightness(0.92);
     }
 
     &:focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 1px;
+      outline: 2px solid var(--m3-primary);
+      outline-offset: 2px;
+    }
+  }
+
+  &__supporting {
+    margin: 6px 16px 0;
+    font-size: 12px;
+    color: var(--m3-on-surface-variant);
+  }
+
+  &__owners {
+    margin-top: 28px;
+
+    @media (min-width: 1200px) {
+      margin-top: 0;
+    }
+  }
+
+  &__section-title {
+    margin: 0 4px 8px;
+    font-family: var(--m3-font);
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+    letter-spacing: 0.1px;
+    color: var(--m3-primary);
+  }
+
+  &__owner-list {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    list-style: none;
+    border-radius: 20px;
+    background: var(--m3-surface-container);
+
+    li + li {
+      border-top: 1px solid var(--border);
     }
 
-    h3 {
-      font-size: 16px;
-      color: var(--text-h);
-      margin: 0 0 4px;
+    // Medium and up: a grid of cards instead of one grouped list.
+    @media (min-width: 600px) {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 12px;
+      overflow: visible;
+      background: none;
+      border-radius: 0;
+
+      li + li {
+        border-top: 0;
+      }
+
+      li {
+        overflow: hidden;
+        border-radius: 16px;
+        background: var(--m3-surface-container);
+      }
+    }
+  }
+
+  &__owner-item {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    min-height: 72px;
+    padding: 12px 16px;
+    color: inherit;
+    text-decoration: none;
+    transition: background 0.15s;
+
+    &:hover {
+      background: color-mix(in srgb, var(--m3-on-surface) 8%, transparent);
     }
 
-    p {
-      margin: 0;
-      font-size: 14px;
-      color: var(--text);
+    &:active {
+      background: color-mix(in srgb, var(--m3-on-surface) 12%, transparent);
     }
+
+    &:focus-visible {
+      outline: 2px solid var(--m3-primary);
+      outline-offset: -2px;
+    }
+  }
+
+  &__owner-text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  // Whole row is the link; this is its visible call to action (M3 tonal button).
+  &__owner-visit {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    height: 40px;
+    padding: 0 20px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.1px;
+    color: var(--m3-on-primary);
+    background: var(--m3-primary);
+    transition: filter 0.15s;
+  }
+
+  &__owner-item:hover &__owner-visit {
+    filter: brightness(1.08);
+  }
+
+  &__owner-name {
+    font-size: 16px;
+    line-height: 24px;
+    color: var(--m3-on-surface);
+  }
+
+  &__owner-meta {
+    overflow: hidden;
+    font-size: 14px;
+    line-height: 20px;
+    color: var(--m3-on-surface-variant);
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
 }

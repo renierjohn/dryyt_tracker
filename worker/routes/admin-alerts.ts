@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { sanitizeHtml } from '../sanitize';
-import { createAlert, getUserById } from '../db';
+import { createAlert, getUserById, listUsersByParent, listUsersWithRoles } from '../db';
 import type { DbAlert } from '../db';
 import { requireRole } from '../middleware/auth';
 import type { AppBindings } from '../types';
@@ -14,6 +14,21 @@ adminAlertsRoutes.use('*', requireRole('admin', 'owner', 'superadmin'));
 
 const ALERT_TYPES = new Set(['info', 'success', 'warning', 'danger']);
 const ALERT_VISIBILITIES = new Set(['dashboard', 'public', 'both']);
+
+// Suggestions for the "Target user" field: an owner's own customers, or every
+// active user for admin/superadmin.
+adminAlertsRoutes.get('/alert-targets', async (c) => {
+  const me = c.get('user')!;
+  const users =
+    me.role_name === 'owner'
+      ? await listUsersByParent(c.env.DB, me.id)
+      : await listUsersWithRoles(c.env.DB);
+  return c.json({
+    users: users
+      .filter((u) => u.is_active)
+      .map((u) => ({ id: u.id, display_name: u.display_name, email: u.email })),
+  });
+});
 
 adminAlertsRoutes.post('/users/:id/alerts', async (c) => {
   const admin = c.get('user')!;

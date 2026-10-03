@@ -1,6 +1,7 @@
 export interface Env {
   DB: D1Database;
   AVATARS: R2Bucket;
+  TRANSACTION_IMAGES: R2Bucket;
   DEV_MODE?: 'true' | 'false';
 }
 
@@ -13,6 +14,7 @@ export interface AuthUser {
   permissions: string[];
   avatar_key: string | null;
   parent_id: number | null;
+  contact_number: string | null;
 }
 
 export type AppBindings = {

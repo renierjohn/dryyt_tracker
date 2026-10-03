@@ -8,6 +8,11 @@ export interface DbUser {
   avatar_key: string | null;
   is_active: number;
   parent_id: number | null;
+  contact_number: string | null;
+  address: string | null;
+  lat: number | null;
+  lng: number | null;
+  opening_hours: string | null;
   created_at: string;
 }
 
@@ -53,13 +58,22 @@ export async function createUser(
     roleId: number;
     displayName: string;
     parentId?: number | null;
+    contactNumber?: string | null;
   },
 ): Promise<DbUser> {
   const result = await db
     .prepare(
-      'INSERT INTO users (email, password_hash, password_salt, role_id, display_name, parent_id) VALUES (?, ?, ?, ?, ?, ?) RETURNING *',
+      'INSERT INTO users (email, password_hash, password_salt, role_id, display_name, parent_id, contact_number) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *',
     )
-    .bind(params.email, params.passwordHash, params.passwordSalt, params.roleId, params.displayName, params.parentId ?? null)
+    .bind(
+      params.email,
+      params.passwordHash,
+      params.passwordSalt,
+      params.roleId,
+      params.displayName,
+      params.parentId ?? null,
+      params.contactNumber ?? null,
+    )
     .first<DbUser>();
   if (!result) throw new Error('failed to create user');
   return result;
@@ -188,7 +202,8 @@ export async function getSessionWithUser(
               u.id as u_id, u.email as u_email, u.password_hash as u_password_hash,
               u.password_salt as u_password_salt, u.role_id as u_role_id,
               u.display_name as u_display_name, u.avatar_key as u_avatar_key, u.is_active as u_is_active,
-              u.parent_id as u_parent_id, u.created_at as u_created_at,
+              u.parent_id as u_parent_id, u.contact_number as u_contact_number, u.address as u_address, u.lat as u_lat, u.lng as u_lng,
+              u.opening_hours as u_opening_hours, u.created_at as u_created_at,
               r.id as r_id, r.name as r_name, r.permissions as r_permissions, r.created_at as r_created_at
        FROM sessions s
        JOIN users u ON u.id = s.user_id
@@ -215,6 +230,11 @@ export async function getSessionWithUser(
       avatar_key: row.u_avatar_key as string | null,
       is_active: row.u_is_active as number,
       parent_id: (row.u_parent_id as number | null) ?? null,
+      contact_number: (row.u_contact_number as string | null) ?? null,
+      address: (row.u_address as string | null) ?? null,
+      lat: (row.u_lat as number | null) ?? null,
+      lng: (row.u_lng as number | null) ?? null,
+      opening_hours: (row.u_opening_hours as string | null) ?? null,
       created_at: row.u_created_at as string,
     },
     role: {
@@ -306,20 +326,39 @@ export async function updatePasswordHash(
 export async function updateUserProfile(
   db: D1Database,
   userId: number,
-  params: { displayName?: string; email?: string },
+  // contactNumber: undefined leaves it unchanged, null clears it.
+  params: { displayName?: string; email?: string; contactNumber?: string | null },
 ): Promise<DbUser> {
   const result = await db
     .prepare(
       `UPDATE users SET
          display_name = COALESCE(?, display_name),
-         email = COALESCE(?, email)
+         email = COALESCE(?, email),
+         contact_number = CASE WHEN ? THEN ? ELSE contact_number END
        WHERE id = ?
        RETURNING *`,
     )
-    .bind(params.displayName ?? null, params.email ?? null, userId)
+    .bind(
+      params.displayName ?? null,
+      params.email ?? null,
+      params.contactNumber !== undefined ? 1 : 0,
+      params.contactNumber ?? null,
+      userId,
+    )
     .first<DbUser>();
   if (!result) throw new Error('user not found');
   return result;
+}
+
+export async function updateStoreDetails(
+  db: D1Database,
+  userId: number,
+  params: { address: string | null; lat: number | null; lng: number | null; openingHours: string | null },
+): Promise<void> {
+  await db
+    .prepare('UPDATE users SET address = ?, lat = ?, lng = ?, opening_hours = ? WHERE id = ?')
+    .bind(params.address, params.lat, params.lng, params.openingHours, userId)
+    .run();
 }
 
 export async function setUserAvatarKey(db: D1Database, userId: number, avatarKey: string | null): Promise<void> {
