@@ -7,6 +7,7 @@
     "dev": "vite",
     "dev:worker": "wrangler dev",
     "plugins:sync": "node script/plugins/sync-migrations.js",
+    "seed:old-transactions": "node script/workflow/seed-old-transactions.js",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",

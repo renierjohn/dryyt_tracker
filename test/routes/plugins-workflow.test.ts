@@ -358,3 +358,54 @@ describe('GET /api/plugins/workflow/admin/transactions/:id', () => {
     expect((await req('GET', '/api/plugins/workflow/admin/transactions/999999', undefined, superCookie)).status).toBe(404);
   });
 });
+
+describe('end status', () => {
+  it('accepts end, stamping done_at when skipping straight to it and keeping an earlier one', async () => {
+    const adminCookie = await createUserWithRoleAndLogin('workflow-end@example.com', await getAdminRoleId(), 'Admin');
+    const create = async () =>
+      ((await (await req('POST', '/api/plugins/workflow/transactions', { customer_name: 'End' }, adminCookie)).json()) as {
+        transaction: { id: number };
+      }).transaction.id;
+    type Txn = { transaction: { status: string; done_at: string | null } };
+    const setStatus = async (id: number, status: string) =>
+      (await (await req('PUT', `/api/plugins/workflow/transactions/${id}/status`, { status }, adminCookie)).json()) as Txn;
+
+    const direct = await create();
+    const ended = await setStatus(direct, 'end');
+    expect(ended.transaction.status).toBe('end');
+    expect(ended.transaction.done_at).not.toBeNull();
+
+    const viaDone = await create();
+    const done = await setStatus(viaDone, 'done');
+    expect((await setStatus(viaDone, 'end')).transaction.done_at).toBe(done.transaction.done_at);
+  });
+});
+
+describe('GET /api/plugins/workflow/transactions by status', () => {
+  it('leaves end out of the default list and pages ?status=end by 10', async () => {
+    const adminCookie = await createUserWithRoleAndLogin('workflow-end-page@example.com', await getAdminRoleId(), 'Admin');
+    const ids: number[] = [];
+    for (let i = 0; i < 12; i++) {
+      const res = await req('POST', '/api/plugins/workflow/transactions', { customer_name: `End page ${i}` }, adminCookie);
+      ids.push(((await res.json()) as { transaction: { id: number } }).transaction.id);
+    }
+    for (const id of ids.slice(0, 11)) {
+      await req('PUT', `/api/plugins/workflow/transactions/${id}/status`, { status: 'end' }, adminCookie);
+    }
+    type Page = { total?: number; page?: number; page_size?: number; transactions: Array<{ id: number; status: string }> };
+    const get = async (qs: string) =>
+      (await (await req('GET', `/api/plugins/workflow/transactions${qs}`, undefined, adminCookie)).json()) as Page;
+
+    const open = await get('');
+    expect(open.transactions.map((t) => t.id)).toEqual([ids[11]]);
+    expect(open.total).toBeUndefined();
+
+    const first = await get('?status=end');
+    expect(first).toMatchObject({ total: 11, page: 1, page_size: 10 });
+    expect(first.transactions).toHaveLength(10);
+    expect(first.transactions.every((t) => t.status === 'end')).toBe(true);
+    expect((await get('?status=end&page=2')).transactions).toHaveLength(1);
+
+    expect((await req('GET', '/api/plugins/workflow/transactions?status=bogus', undefined, adminCookie)).status).toBe(400);
+  });
+});

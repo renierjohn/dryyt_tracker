@@ -60,6 +60,7 @@ const STATUS_LABELS: Record<string, string> = {
   in_progress: 'In progress',
   done: 'Done',
   ready_to_pickup: 'Ready for pickup',
+  end: 'End',
 };
 
 // Reached from an owner's card on the homepage (src/components/OwnersList.tsx).

@@ -1,0 +1,31 @@
+-- Adds the 'end' status (the order is closed out after pickup). SQLite can't
+-- alter a CHECK constraint, so the table is rebuilt with the same columns and
+-- data. Foreign-key checks are deferred to the end of the migration so the
+-- photos table's references to workflow_transactions(id) stay valid across
+-- the drop + rename.
+PRAGMA defer_foreign_keys = true;
+
+CREATE TABLE workflow_transactions_new (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code TEXT NOT NULL UNIQUE,
+  customer_name TEXT NOT NULL,
+  customer_contact TEXT,
+  description TEXT,
+  status TEXT NOT NULL DEFAULT 'hold'
+    CHECK (status IN ('hold', 'in_progress', 'done', 'ready_to_pickup', 'end')),
+  created_by INTEGER NOT NULL REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  done_at TEXT,
+  customer_user_id INTEGER REFERENCES users(id)
+);
+
+INSERT INTO workflow_transactions_new
+  (id, code, customer_name, customer_contact, description, status, created_by, created_at, updated_at, done_at, customer_user_id)
+SELECT id, code, customer_name, customer_contact, description, status, created_by, created_at, updated_at, done_at, customer_user_id
+FROM workflow_transactions;
+
+DROP TABLE workflow_transactions;
+ALTER TABLE workflow_transactions_new RENAME TO workflow_transactions;
+
+PRAGMA defer_foreign_keys = false;

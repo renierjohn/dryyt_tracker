@@ -125,7 +125,7 @@ workflowRoutes.get('/owners/:identifier/transactions', async (c) => {
   });
 });
 
-const STATUSES = new Set(['hold', 'in_progress', 'done', 'ready_to_pickup']);
+const STATUSES = new Set(['hold', 'in_progress', 'done', 'ready_to_pickup', 'end']);
 
 export interface WorkflowTransaction {
   id: number;
@@ -245,29 +245,57 @@ workflowRoutes.get('/customers', requirePermission('manage_users'), async (c) =>
   });
 });
 
+// The owner's own transactions, newest first. Without ?status=, every
+// transaction that isn't 'end' (the open work — unpaginated). With
+// ?status=<status>, only that status, a page of 10 at a time (?page=), plus
+// total/page/page_size — the Tracker's "End" section grows without bound.
 workflowRoutes.get('/transactions', requirePermission('manage_users'), async (c) => {
   const user = c.get('user')!;
-  const { results } = await c.env.DB
-    // Secondary sort by id: created_at has only second resolution, so two
-    // transactions registered within the same second would otherwise tie and
-    // fall back to an unspecified (in practice insertion/ascending) order.
-    .prepare('SELECT * FROM workflow_transactions WHERE created_by = ? ORDER BY created_at DESC, id DESC')
-    .bind(user.id)
-    .all<WorkflowTransaction>();
+  const status = c.req.query('status');
+  if (status !== undefined && !STATUSES.has(status)) return c.json({ error: 'invalid_status' }, 400);
+
+  // Secondary sort by id: created_at has only second resolution, so two
+  // transactions registered within the same second would otherwise tie and
+  // fall back to an unspecified (in practice insertion/ascending) order.
+  const order = 'ORDER BY created_at DESC, id DESC';
+  let results: WorkflowTransaction[];
+  let paging: { page: number; page_size: number; total: number } | null = null;
+  if (status === undefined) {
+    ({ results } = await c.env.DB
+      .prepare(`SELECT * FROM workflow_transactions WHERE created_by = ? AND status != 'end' ${order}`)
+      .bind(user.id)
+      .all<WorkflowTransaction>());
+  } else {
+    const { page, limit, offset } = parsePage(c.req.query('page'));
+    const [rows, count] = await c.env.DB.batch([
+      c.env.DB
+        .prepare(`SELECT * FROM workflow_transactions WHERE created_by = ? AND status = ? ${order} LIMIT ? OFFSET ?`)
+        .bind(user.id, status, limit, offset),
+      c.env.DB
+        .prepare('SELECT COUNT(*) AS n FROM workflow_transactions WHERE created_by = ? AND status = ?')
+        .bind(user.id, status),
+    ]);
+    results = rows.results as WorkflowTransaction[];
+    paging = { page, page_size: PAGE_SIZE, total: (count.results[0] as { n: number }).n };
+  }
+
+  // Photos for just the returned rows; ids go in as one JSON array parameter.
   const { results: images } = await c.env.DB
     .prepare(
-      `SELECT i.id, i.transaction_id FROM workflow_transaction_images i
-       JOIN workflow_transactions t ON t.id = i.transaction_id
-       WHERE t.created_by = ? ORDER BY i.id`,
+      `SELECT id, transaction_id FROM workflow_transaction_images
+       WHERE transaction_id IN (SELECT value FROM json_each(?)) ORDER BY id`,
     )
-    .bind(user.id)
+    .bind(JSON.stringify(results.map((t) => t.id)))
     .all<{ id: number; transaction_id: number }>();
   const imageIds = new Map<number, number[]>();
   for (const img of images) {
     imageIds.set(img.transaction_id, [...(imageIds.get(img.transaction_id) ?? []), img.id]);
   }
   const transactions = await Promise.all(results.map(withSafeDescription));
-  return c.json({ transactions: transactions.map((t) => ({ ...t, image_ids: imageIds.get(t.id) ?? [] })) });
+  return c.json({
+    ...paging,
+    transactions: transactions.map((t) => ({ ...t, image_ids: imageIds.get(t.id) ?? [] })),
+  });
 });
 
 // Superadmin console: every transaction across all owners, newest first, with
@@ -479,14 +507,16 @@ workflowRoutes.put('/transactions/:id/status', requirePermission('manage_users')
 
   const row = await c.env.DB
     .prepare(
-      // done_at: stamped on the first move to 'done', kept through
-      // 'ready_to_pickup', cleared if the work is reopened (hold/in_progress).
+      // done_at: stamped on the first move to 'done' (or straight to 'end'),
+      // kept through 'ready_to_pickup'/'end', cleared if the work is reopened
+      // (hold/in_progress).
       `UPDATE workflow_transactions SET
          status = ?1,
          updated_at = datetime('now'),
          done_at = CASE ?1
            WHEN 'done' THEN COALESCE(done_at, datetime('now'))
            WHEN 'ready_to_pickup' THEN done_at
+           WHEN 'end' THEN COALESCE(done_at, datetime('now'))
            ELSE NULL
          END
        WHERE id = ?2 AND created_by = ?3 RETURNING *`,

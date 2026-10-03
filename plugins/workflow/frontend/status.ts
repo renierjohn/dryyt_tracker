@@ -3,4 +3,5 @@ export const STATUS_LABELS: Record<string, string> = {
   in_progress: 'In progress',
   done: 'Done',
   ready_to_pickup: 'Ready for pickup',
+  end: 'End',
 };

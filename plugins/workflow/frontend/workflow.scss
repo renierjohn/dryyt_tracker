@@ -331,3 +331,65 @@
 .m3-shell .workflow-thumbs a {
   cursor: zoom-in;
 }
+
+// Status section titles on the Tracker page: an icon chip, tinted per status.
+.workflow-section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.workflow-section-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  color: #174ea6;
+  background: #e8f0fe;
+
+  .m3-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  &--hold {
+    color: #8a4b00;
+    background: #fef7e0;
+  }
+
+  &--done,
+  &--ready_to_pickup {
+    color: #0d652d;
+    background: #e6f4ea;
+  }
+
+  &--end {
+    color: #3c4043;
+    background: #e8eaed;
+  }
+}
+
+// Prev/Next under the Tracker's paginated "End" section.
+.workflow-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 20px 12px;
+  font-size: 13px;
+  color: var(--m3-on-surface-variant);
+
+  &__controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .m3-button {
+    height: 32px;
+    padding: 0 14px;
+  }
+}

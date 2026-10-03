@@ -24,10 +24,11 @@ const STATUS_LABELS: Record<string, string> = {
   in_progress: 'In progress',
   done: 'Done',
   ready_to_pickup: 'Ready for pickup',
+  end: 'End',
 };
 
 // The normal path an order moves along; 'hold' sits off it (see statusStep).
-const STEPS = ['in_progress', 'done', 'ready_to_pickup'];
+const STEPS = ['in_progress', 'done', 'ready_to_pickup', 'end'];
 
 function formatUpdated(updatedAt: string) {
   return new Date(updatedAt.replace(' ', 'T') + 'Z').toLocaleString();

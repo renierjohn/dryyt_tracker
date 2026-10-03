@@ -8,7 +8,7 @@ export * from './slots';
 export { apiFetch, ApiError } from '../src/lib/api';
 export { useCurrentUser, type AuthUser } from '../src/lib/useCurrentUser';
 export { useSession } from '../src/lib/session';
-export { default as AppShell, Icon } from '../src/components/AppShell';
+export { default as AppShell, Icon, type IconName } from '../src/components/AppShell';
 export { hasPermission } from '../src/lib/permissions';
 export { default as RichTextEditor, type RichTextEditorInstance } from '../src/components/RichTextEditor';
 export { default as RichText } from '../src/components/RichText';

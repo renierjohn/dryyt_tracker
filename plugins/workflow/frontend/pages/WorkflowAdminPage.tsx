@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import {
   apiFetch,
   ApiError,
@@ -8,6 +8,7 @@ import {
   RichText,
   RichTextEditor,
   useColorbox,
+  type IconName,
   hasPermission,
   CONTACT_ERROR,
   isInvalidContact,
@@ -58,10 +59,12 @@ function AdminView() {
   const [error, setError] = useState<string | null>(null);
   const [lastCode, setLastCode] = useState<string | null>(null);
   const [openTransaction, setOpenTransaction] = useState<Transaction | null>(null);
-  const tableRef = useRef<HTMLDivElement>(null);
-  useColorbox(tableRef, transactions);
+  // "End" is paginated server-side (it only grows); everything else comes
+  // back in one unpaginated list.
+  const [ended, setEnded] = useState<PagedTransactions | null>(null);
+  const [endedPage, setEndedPage] = useState(1);
 
-  async function loadTransactions() {
+  async function loadOpen() {
     try {
       const body = await apiFetch<{ transactions: Transaction[] }>('/plugins/workflow/transactions');
       setTransactions(body.transactions);
@@ -70,9 +73,27 @@ function AdminView() {
     }
   }
 
+  async function loadEnded(page: number) {
+    try {
+      const body = await apiFetch<PagedTransactions>(`/plugins/workflow/transactions?status=end&page=${page}`);
+      const lastPage = Math.max(1, Math.ceil(body.total / body.page_size));
+      // The page emptied (e.g. its last row was reopened) — step back.
+      if (page > lastPage) return loadEnded(lastPage);
+      setEndedPage(page);
+      setEnded(body);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.code : 'unknown_error');
+    }
+  }
+
+  async function loadTransactions() {
+    await Promise.all([loadOpen(), loadEnded(endedPage)]);
+  }
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadTransactions();
+    void loadOpen();
+    void loadEnded(1);
   }, []);
 
   async function handleStatusChange(id: number, status: string) {
@@ -103,74 +124,186 @@ function AdminView() {
             Registered — code for the customer: <strong>{lastCode}</strong>
           </p>
         )}
-        <div className="m3-card m3-card--flush">
-          <h2 className="m3-card__title">Transactions</h2>
-          {transactions.length === 0 ? (
-            <p className="m3-supporting" style={{ margin: '0 20px 12px' }}>No transactions yet.</p>
-          ) : (
-            <div ref={tableRef} className="m3-table-wrap">
-              <table className="m3-table">
-                <thead>
-                  <tr>
-                    <th>Code</th>
-                    <th>Photos</th>
-                    <th>Customer</th>
-                    <th>Description</th>
-                    <th>Status</th>
-                    <th>Start</th>
-                    <th>End</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {transactions.map((t) => (
-                    <tr key={t.id}>
-                      <td><code>{t.code}</code></td>
-                      <td>
-                        <span className="workflow-thumbs">
-                          {t.image_ids.map((imageId) => {
-                            const src = `/api/plugins/workflow/transactions/${t.id}/images/${imageId}`;
-                            return (
-                              <a key={imageId} href={src} data-colorbox={`row-${t.id}`} title={t.code}>
-                                <img src={src} alt={`Photo for ${t.code}`} loading="lazy" />
-                              </a>
-                            );
-                          })}
-                        </span>
-                      </td>
-                      <td>{t.customer_name}</td>
-                      <td>
-                        <button type="button" className="txn-desc" onClick={() => setOpenTransaction(t)}>
-                          {t.description ? (
-                            <RichText as="span" html={t.description} lines={2} />
-                          ) : (
-                            <span className="txn-desc__empty">View details</span>
-                          )}
-                        </button>
-                      </td>
-                      <td>
-                        <select
-                          className="m3-select m3-select--dense"
-                          aria-label={`Status for ${t.code}`}
-                          value={t.status}
-                          onChange={(e) => handleStatusChange(t.id, e.target.value)}
-                        >
-                          {STATUSES.map((s) => (
-                            <option key={s} value={s}>{STATUS_LABELS[s]}</option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="m3-table__nowrap">{formatDateTime(t.created_at)}</td>
-                      <td className="m3-table__nowrap">{formatDateTime(t.done_at)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+        {STATUSES.map((status) => {
+          const isEnd = status === 'end';
+          const rows = isEnd ? (ended?.transactions ?? []) : transactions.filter((t) => t.status === status);
+          const count = isEnd ? (ended?.total ?? 0) : rows.length;
+          return (
+            <TransactionsTable
+              key={status}
+              status={status}
+              title={`${STATUS_LABELS[status]} (${count})`}
+              empty="None."
+              defaultOpen={status === 'hold'}
+              transactions={rows}
+              onStatusChange={handleStatusChange}
+              onOpen={setOpenTransaction}
+              footer={
+                isEnd && ended ? (
+                  <Pager
+                    page={endedPage}
+                    pageCount={Math.max(1, Math.ceil(ended.total / ended.page_size))}
+                    total={ended.total}
+                    pageSize={ended.page_size}
+                    onPage={(page) => void loadEnded(page)}
+                  />
+                ) : null
+              }
+            />
+          );
+        })}
       </section>
       {openTransaction && <TransactionDialog transaction={openTransaction} onClose={() => setOpenTransaction(null)} />}
     </AppShell>
+  );
+}
+
+// One collapsible card of the owner's transactions table — the page renders
+// one per status, in STATUS_LABELS order, with only "On hold" open at first.
+// `open` is only the initial state: React leaves the attribute alone after a
+// user toggles it, since the prop never changes.
+function TransactionsTable({
+  status,
+  title,
+  empty,
+  defaultOpen,
+  footer,
+  transactions,
+  onStatusChange,
+  onOpen,
+}: {
+  status: string;
+  title: string;
+  empty: string;
+  defaultOpen: boolean;
+  footer?: ReactNode;
+  transactions: Transaction[];
+  onStatusChange: (id: number, status: string) => void;
+  onOpen: (transaction: Transaction) => void;
+}) {
+  const tableRef = useRef<HTMLDivElement>(null);
+  useColorbox(tableRef, transactions);
+
+  return (
+    <details className="m3-card m3-card--flush m3-collapsible" open={defaultOpen}>
+      <summary className="m3-card__title">
+        <span className="workflow-section-title">
+          <span className={`workflow-section-icon workflow-section-icon--${status}`}>
+            <Icon name={status as IconName} />
+          </span>
+          {title}
+        </span>
+      </summary>
+      {transactions.length === 0 ? (
+        <p className="m3-supporting" style={{ margin: '0 20px 12px' }}>{empty}</p>
+      ) : (
+        <div ref={tableRef} className="m3-table-wrap">
+          <table className="m3-table">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Photos</th>
+                <th>Customer</th>
+                <th>Description</th>
+                <th>Status</th>
+                <th>Start</th>
+                <th>End</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map((t) => (
+                <tr key={t.id}>
+                  <td><code>{t.code}</code></td>
+                  <td>
+                    <span className="workflow-thumbs">
+                      {t.image_ids.map((imageId) => {
+                        const src = `/api/plugins/workflow/transactions/${t.id}/images/${imageId}`;
+                        return (
+                          <a key={imageId} href={src} data-colorbox={`row-${t.id}`} title={t.code}>
+                            <img src={src} alt={`Photo for ${t.code}`} loading="lazy" />
+                          </a>
+                        );
+                      })}
+                    </span>
+                  </td>
+                  <td>{t.customer_name}</td>
+                  <td>
+                    <button type="button" className="txn-desc" onClick={() => onOpen(t)}>
+                      {t.description ? (
+                        <RichText as="span" html={t.description} lines={2} />
+                      ) : (
+                        <span className="txn-desc__empty">View details</span>
+                      )}
+                    </button>
+                  </td>
+                  <td>
+                    <select
+                      className="m3-select m3-select--dense"
+                      aria-label={`Status for ${t.code}`}
+                      value={t.status}
+                      onChange={(e) => onStatusChange(t.id, e.target.value)}
+                    >
+                      {STATUSES.map((s) => (
+                        <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="m3-table__nowrap">{formatDateTime(t.created_at)}</td>
+                  <td className="m3-table__nowrap">{formatDateTime(t.done_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {footer}
+    </details>
+  );
+}
+
+interface PagedTransactions {
+  transactions: Transaction[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+function Pager({
+  page,
+  pageCount,
+  total,
+  pageSize,
+  onPage,
+}: {
+  page: number;
+  pageCount: number;
+  total: number;
+  pageSize: number;
+  onPage: (page: number) => void;
+}) {
+  if (total === 0) return null;
+  return (
+    <nav className="workflow-pager" aria-label="Ended transactions pages">
+      <span>
+        {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} of {total}
+      </span>
+      {pageCount > 1 && (
+        <span className="workflow-pager__controls">
+          <button type="button" className="m3-button m3-button--tonal" onClick={() => onPage(page - 1)} disabled={page === 1}>
+            ‹ Prev
+          </button>
+          <span aria-current="page">Page {page} of {pageCount}</span>
+          <button
+            type="button"
+            className="m3-button m3-button--tonal"
+            onClick={() => onPage(page + 1)}
+            disabled={page === pageCount}
+          >
+            Next ›
+          </button>
+        </span>
+      )}
+    </nav>
   );
 }
 

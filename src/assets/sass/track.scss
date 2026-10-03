@@ -134,9 +134,14 @@
       color: #0d652d;
       background: #ceead6;
     }
+
+    &--end {
+      color: #3c4043;
+      background: #e8eaed;
+    }
   }
 
-  // Horizontal progress: in progress → done → ready for pickup. Steps up to
+  // Horizontal progress: in progress → done → ready for pickup → end. Steps up to
   // and including the current status are filled; the line between two steps
   // fills once the later one is reached. Plain selectors below: this block is
   // nested under `.m3-shell .track`, so `&`-compound selectors would repeat
