@@ -1,0 +1,54 @@
+// Overrides for the core app's --accent* custom properties (see
+// src/assets/sass/_variables.scss), scoped under a data-theme attribute that
+// ThemeApplier.tsx sets on <html> once it knows the signed-in user's effective
+// flavor. 'default' needs no block — it's just the base variables untouched.
+
+:root[data-theme='ocean'] {
+  --accent: #0ea5e9;
+  --accent-bg: rgba(14, 165, 233, 0.1);
+  --accent-border: rgba(14, 165, 233, 0.5);
+}
+
+:root[data-theme='sunset'] {
+  --accent: #f97316;
+  --accent-bg: rgba(249, 115, 22, 0.1);
+  --accent-border: rgba(249, 115, 22, 0.5);
+}
+
+:root[data-theme='forest'] {
+  --accent: #16a34a;
+  --accent-bg: rgba(22, 163, 74, 0.1);
+  --accent-border: rgba(22, 163, 74, 0.5);
+}
+
+:root[data-theme='midnight'] {
+  --accent: #6366f1;
+  --accent-bg: rgba(99, 102, 241, 0.1);
+  --accent-border: rgba(99, 102, 241, 0.5);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme='ocean'] {
+    --accent: #38bdf8;
+    --accent-bg: rgba(56, 189, 248, 0.15);
+    --accent-border: rgba(56, 189, 248, 0.5);
+  }
+
+  :root[data-theme='sunset'] {
+    --accent: #fb923c;
+    --accent-bg: rgba(251, 146, 60, 0.15);
+    --accent-border: rgba(251, 146, 60, 0.5);
+  }
+
+  :root[data-theme='forest'] {
+    --accent: #4ade80;
+    --accent-bg: rgba(74, 222, 128, 0.15);
+    --accent-border: rgba(74, 222, 128, 0.5);
+  }
+
+  :root[data-theme='midnight'] {
+    --accent: #818cf8;
+    --accent-bg: rgba(129, 140, 248, 0.15);
+    --accent-border: rgba(129, 140, 248, 0.5);
+  }
+}

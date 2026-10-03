@@ -6,6 +6,7 @@ import { avatarRoutes } from './routes/avatars';
 import { alertRoutes } from './routes/alerts';
 import { adminRoutes } from './routes/admin';
 import { adminAlertsRoutes } from './routes/admin-alerts';
+import { ownerRoutes } from './routes/owner';
 import { publicRoutes } from './routes/public';
 import { pluginRouters } from './plugins';
 import type { AppBindings } from './types';
@@ -19,6 +20,7 @@ app.route('/api/avatars', avatarRoutes);
 app.route('/api/alerts', alertRoutes);
 app.route('/api/admin', adminAlertsRoutes);
 app.route('/api/admin', adminRoutes);
+app.route('/api/owner', ownerRoutes);
 app.route('/api', publicRoutes);
 
 for (const { path, router } of pluginRouters) {

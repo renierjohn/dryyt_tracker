@@ -1,28 +1,91 @@
 .dashboard {
-  max-width: 720px;
+  // Desktop default. auto-fit grids and the flex/wrap pieces below already
+  // reflow their contents on their own — these three tiers only need to widen
+  // or narrow the column the page sits in and ease its padding to match.
+  width: 100%;
+  max-width: 840px;
   margin: 0 auto;
-  padding: 32px 20px 64px;
+  padding: 28px 24px 64px;
   text-align: left;
+  box-sizing: border-box;
 
-  > .dashboard__button {
+  // Tablet.
+  @media (max-width: 1024px) {
+    max-width: 640px;
+  }
+
+  // Mobile.
+  @media (max-width: 640px) {
+    padding: 20px 16px 48px;
+  }
+
+  // The in-page section switcher (Users / Alerts / Profile) — distinct from
+  // the boxed .tab-bar at the bottom, which navigates to other pages instead
+  // of swapping content in place.
+  &__tabs {
+    display: flex;
+    gap: 20px;
+    border-bottom: 1px solid var(--border);
     margin-bottom: 20px;
+  }
+
+  &__tab {
+    appearance: none;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 0 0 10px;
+    margin-bottom: -1px;
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s;
+
+    &:hover {
+      color: var(--text-h);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    &--active {
+      color: var(--text-h);
+      border-bottom-color: var(--accent);
+    }
   }
 
   &__section {
     border: 1px solid var(--border);
     border-radius: 8px;
-    padding: 20px;
-    margin-bottom: 20px;
+    padding: 16px 18px;
+    margin-bottom: 14px;
+
+    @media (max-width: 640px) {
+      padding: 14px;
+    }
 
     h2 {
       text-align: left;
-      margin-bottom: 16px;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+      color: var(--text);
+      margin: 0 0 14px;
     }
 
     h3 {
-      font-size: 16px;
+      font-size: 13px;
+      font-weight: 600;
       color: var(--text);
-      margin: 0 0 8px;
+      margin: 18px 0 10px;
+
+      &:first-of-type {
+        margin-top: 0;
+      }
     }
   }
 
@@ -39,37 +102,79 @@
   }
 
   &__form {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-end;
-    gap: 12px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px 12px;
+    align-items: end;
+
+    // Only <label> fields flow into the column grid — anything else a form
+    // passes in directly (an <h3>, an error/saved message, the submit button)
+    // spans the full row instead of eating one of the label columns.
+    > * {
+      grid-column: 1 / -1;
+    }
+
+    > label {
+      grid-column: auto;
+    }
 
     label {
       display: flex;
       flex-direction: column;
-      gap: 4px;
-      font-size: 14px;
+      gap: 3px;
+      font-size: 13px;
       color: var(--text);
     }
 
     input {
       font: inherit;
+      font-size: 14px;
       color: var(--text-h);
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 6px;
-      padding: 6px 10px;
-      min-width: 200px;
+      padding: 7px 10px;
+      width: 100%;
+      box-sizing: border-box;
 
       &:focus-visible {
         outline: 2px solid var(--accent);
         outline-offset: 1px;
       }
     }
+
+    > .dashboard__button {
+      justify-self: start;
+      margin-top: 2px;
+    }
   }
 
   &__saved {
+    font-size: 13px;
     color: #15803d;
+  }
+
+  &__table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 4px;
+
+    th,
+    td {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      font-size: 14px;
+    }
+
+    th {
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    td {
+      color: var(--text-h);
+    }
   }
 
   &__alert-list {
@@ -78,13 +183,13 @@
     margin: 0;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
   }
 
   &__alert-item {
     border: 1px solid var(--border);
     border-radius: 8px;
-    padding: 12px 16px;
+    padding: 10px 14px;
   }
 
   &__alert-tag {
@@ -105,11 +210,12 @@
 
   &__button {
     font: inherit;
+    font-size: 14px;
     color: var(--text-h);
     background: var(--accent-bg);
     border: 1px solid var(--accent-border);
     border-radius: 6px;
-    padding: 6px 12px;
+    padding: 7px 14px;
     cursor: pointer;
     transition: border-color 0.2s;
 

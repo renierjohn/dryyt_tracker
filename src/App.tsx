@@ -13,6 +13,7 @@ import Track from './pages/Track'
 import AdminConsole from './pages/AdminConsole'
 import AdminAlerts from './pages/AdminAlerts'
 import MasqueradeBanner from './components/MasqueradeBanner'
+import PluginSlot from './components/PluginSlot'
 import { pluginRoutes } from './plugins/loadPlugins'
 import './assets/sass/app.scss'
 
@@ -23,6 +24,10 @@ function App() {
 
   return (
     <>
+      {/* Root-level extension point: plugins that need to act on every route (not
+          just one host page) register a component for this slot — e.g. the theme
+          plugin applies the signed-in user's flavor here. */}
+      {user && <PluginSlot name="app.root" user={user} />}
       {user && masquerade && <MasqueradeBanner user={user} masquerade={masquerade} refresh={refresh} />}
       <Routes>
         <Route path="/" element={<Home user={user} refresh={refresh} />} />
@@ -64,7 +69,8 @@ function App() {
         />
         {pluginRoutes.map((route) => {
           const element =
-            !user ? <Navigate to="/login" replace />
+            route.public ? route.element
+            : !user ? <Navigate to="/login" replace />
             : route.requiredPermission && !hasPermission(user, route.requiredPermission)
               ? <Navigate to="/" replace />
               : route.element

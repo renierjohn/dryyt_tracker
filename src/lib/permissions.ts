@@ -16,3 +16,7 @@ export function isSuperadmin(user: AuthUser): boolean {
 export function canSendAlerts(user: AuthUser): boolean {
   return user.role_name === 'admin' || user.role_name === 'owner' || user.role_name === 'superadmin';
 }
+
+export function isOwner(user: AuthUser): boolean {
+  return user.role_name === 'owner';
+}

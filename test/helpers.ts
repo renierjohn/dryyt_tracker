@@ -29,3 +29,8 @@ export async function getAdminRoleId(): Promise<number> {
   const row = await env.DB.prepare("SELECT id FROM roles WHERE name = 'admin'").first<{ id: number }>();
   return row!.id;
 }
+
+export async function getOwnerRoleId(): Promise<number> {
+  const row = await env.DB.prepare("SELECT id FROM roles WHERE name = 'owner'").first<{ id: number }>();
+  return row!.id;
+}

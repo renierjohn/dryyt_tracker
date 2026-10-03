@@ -10,7 +10,13 @@ export interface PluginRoute {
   element: ReactNode;
   // Omit for "any authenticated user"; App.tsx checks this the same way it checks
   // manage_users for /admin (via permissions.includes('*') || includes(requiredPermission)).
+  // Ignored when `public` is set.
   requiredPermission?: string;
+  // Default false. true skips App.tsx's auth check entirely — anonymous visitors
+  // reach the element directly, same as a core public route (e.g. /track). Backend
+  // endpoints the page calls must enforce their own (lack of) auth independently;
+  // this only affects whether the frontend route itself redirects to /login.
+  public?: boolean;
   // An additional URL that renders the same element as `path` (not a redirect) —
   // e.g. a short vanity path like /transactions for /plugins/workflow. Subject to
   // the same requiredPermission gate as the canonical path.

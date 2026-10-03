@@ -14,5 +14,6 @@ export function toPublicUser(user: DbUser, role: DbRole): AuthUser {
     role_name: role.name,
     permissions: JSON.parse(role.permissions) as string[],
     avatar_key: user.avatar_key,
+    parent_id: user.parent_id,
   };
 }

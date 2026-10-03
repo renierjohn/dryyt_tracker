@@ -18,7 +18,6 @@ export default function ProfileSettings({ user, refresh }: { user: AuthUser; ref
       <AvatarSection user={user} refresh={refresh} />
       <ProfileForm user={user} refresh={refresh} />
       <PasswordForm />
-      <AlertsPanel user={user} />
     </>
   );
 }
@@ -138,7 +137,7 @@ function PasswordForm() {
   );
 }
 
-function AlertsPanel({ user }: { user: AuthUser }) {
+export function AlertsPanel({ user }: { user: AuthUser }) {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);

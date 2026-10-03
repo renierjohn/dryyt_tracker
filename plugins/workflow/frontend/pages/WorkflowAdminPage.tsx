@@ -1,5 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { apiFetch, ApiError } from '../../../sdk';
+import '../workflow.scss';
 
 interface Transaction {
   id: number;
@@ -20,7 +22,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 const STATUSES = Object.keys(STATUS_LABELS);
 
-const cellStyle = { padding: '8px 12px', borderBottom: '1px solid #e5e4e7', textAlign: 'left' as const };
+const cellStyle = { padding: '8px 12px', borderBottom: '1px solid var(--border)', textAlign: 'left' as const };
 
 export default function WorkflowAdminPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -54,7 +56,7 @@ export default function WorkflowAdminPage() {
   }
 
   return (
-    <div style={{ maxWidth: 960, margin: '0 auto', padding: '32px 20px 64px' }}>
+    <div style={{ width: '100%', maxWidth: 960, boxSizing: 'border-box', margin: '0 auto', padding: '32px 20px 64px' }}>
       <h1>Workflow</h1>
       {error && <p role="alert">{error}</p>}
       <RegisterTransactionForm
@@ -68,32 +70,43 @@ export default function WorkflowAdminPage() {
           Registered — code for the customer: <strong>{lastCode}</strong>
         </p>
       )}
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr>
-            <th style={cellStyle}>Code</th>
-            <th style={cellStyle}>Customer</th>
-            <th style={cellStyle}>Description</th>
-            <th style={cellStyle}>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {transactions.map((t) => (
-            <tr key={t.id}>
-              <td style={cellStyle}><code>{t.code}</code></td>
-              <td style={cellStyle}>{t.customer_name}</td>
-              <td style={cellStyle}>{t.description ?? ''}</td>
-              <td style={cellStyle}>
-                <select value={t.status} onChange={(e) => handleStatusChange(t.id, e.target.value)}>
-                  {STATUSES.map((s) => (
-                    <option key={s} value={s}>{STATUS_LABELS[s]}</option>
-                  ))}
-                </select>
-              </td>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', minWidth: 560, borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <th style={cellStyle}>Code</th>
+              <th style={cellStyle}>Customer</th>
+              <th style={cellStyle}>Description</th>
+              <th style={cellStyle}>Status</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {transactions.map((t) => (
+              <tr key={t.id}>
+                <td style={cellStyle}><code>{t.code}</code></td>
+                <td style={cellStyle}>{t.customer_name}</td>
+                <td style={cellStyle}>{t.description ?? ''}</td>
+                <td style={cellStyle}>
+                  <select
+                    className="workflow-select"
+                    value={t.status}
+                    onChange={(e) => handleStatusChange(t.id, e.target.value)}
+                  >
+                    {STATUSES.map((s) => (
+                      <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                    ))}
+                  </select>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <nav className="tab-bar">
+        <Link className="tab" to="/">Home</Link>
+        <Link className="tab" to="/dashboard">Dashboard</Link>
+      </nav>
     </div>
   );
 }
@@ -126,22 +139,22 @@ function RegisterTransactionForm({ onCreated }: { onCreated: (code: string) => P
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ marginBottom: 32, display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+    <form className="workflow-form" onSubmit={handleSubmit}>
       <h2 style={{ flexBasis: '100%' }}>Register transaction</h2>
-      {error && <p role="alert" style={{ flexBasis: '100%' }}>{error}</p>}
-      <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      {error && <p role="alert" className="workflow-form__error">{error}</p>}
+      <label>
         Customer name
         <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} required />
       </label>
-      <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <label>
         Contact (optional)
         <input value={customerContact} onChange={(e) => setCustomerContact(e.target.value)} />
       </label>
-      <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <label>
         Description (optional)
         <input value={description} onChange={(e) => setDescription(e.target.value)} />
       </label>
-      <button type="submit" style={{ alignSelf: 'flex-end' }}>Register</button>
+      <button type="submit" className="workflow-button">Register</button>
     </form>
   );
 }

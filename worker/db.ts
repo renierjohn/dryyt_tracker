@@ -7,6 +7,7 @@ export interface DbUser {
   display_name: string;
   avatar_key: string | null;
   is_active: number;
+  parent_id: number | null;
   created_at: string;
 }
 
@@ -45,13 +46,20 @@ export async function countUsers(db: D1Database): Promise<number> {
 // Not used by registration (would reconstruct a count-then-insert race) — see createUserWithBootstrapRole.
 export async function createUser(
   db: D1Database,
-  params: { email: string; passwordHash: string; passwordSalt: string; roleId: number; displayName: string },
+  params: {
+    email: string;
+    passwordHash: string;
+    passwordSalt: string;
+    roleId: number;
+    displayName: string;
+    parentId?: number | null;
+  },
 ): Promise<DbUser> {
   const result = await db
     .prepare(
-      'INSERT INTO users (email, password_hash, password_salt, role_id, display_name) VALUES (?, ?, ?, ?, ?) RETURNING *',
+      'INSERT INTO users (email, password_hash, password_salt, role_id, display_name, parent_id) VALUES (?, ?, ?, ?, ?, ?) RETURNING *',
     )
-    .bind(params.email, params.passwordHash, params.passwordSalt, params.roleId, params.displayName)
+    .bind(params.email, params.passwordHash, params.passwordSalt, params.roleId, params.displayName, params.parentId ?? null)
     .first<DbUser>();
   if (!result) throw new Error('failed to create user');
   return result;
@@ -93,6 +101,57 @@ export async function listRoles(db: D1Database): Promise<DbRole[]> {
   return results;
 }
 
+export async function getRoleByName(db: D1Database, name: string): Promise<DbRole | null> {
+  const row = await db.prepare('SELECT * FROM roles WHERE name = ?').bind(name).first<DbRole>();
+  return row ?? null;
+}
+
+export async function listActiveOwners(db: D1Database): Promise<DbUser[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT u.* FROM users u
+       JOIN roles r ON r.id = u.role_id
+       WHERE r.name = 'owner' AND u.is_active = 1
+       ORDER BY u.display_name`,
+    )
+    .all<DbUser>();
+  return results;
+}
+
+// Resolves the public /owner/:identifier and /plugins/workflow/:identifier
+// routes — identifier is either a numeric id (the original, still-linkable
+// form) or an owner's display_name (the newer /owner/<name> alias). Display
+// names aren't unique, so a name lookup takes whichever active owner matches
+// first; only ever returns an active 'owner'-role user, never any other role.
+export async function getActiveOwnerByIdentifier(db: D1Database, identifier: string): Promise<DbUser | null> {
+  const asId = Number(identifier);
+  if (Number.isInteger(asId) && String(asId) === identifier) {
+    const user = await getUserById(db, asId);
+    if (!user || !user.is_active) return null;
+    const role = await getRoleById(db, user.role_id);
+    return role?.name === 'owner' ? user : null;
+  }
+
+  const row = await db
+    .prepare(
+      `SELECT u.* FROM users u
+       JOIN roles r ON r.id = u.role_id
+       WHERE r.name = 'owner' AND u.is_active = 1 AND u.display_name = ?
+       LIMIT 1`,
+    )
+    .bind(identifier)
+    .first<DbUser>();
+  return row ?? null;
+}
+
+export async function listUsersByParent(db: D1Database, parentId: number): Promise<DbUser[]> {
+  const { results } = await db
+    .prepare('SELECT * FROM users WHERE parent_id = ? ORDER BY created_at DESC, id DESC')
+    .bind(parentId)
+    .all<DbUser>();
+  return results;
+}
+
 export async function createSession(
   db: D1Database,
   token: string,
@@ -128,7 +187,8 @@ export async function getSessionWithUser(
               s.impersonator_id as s_impersonator_id,
               u.id as u_id, u.email as u_email, u.password_hash as u_password_hash,
               u.password_salt as u_password_salt, u.role_id as u_role_id,
-              u.display_name as u_display_name, u.avatar_key as u_avatar_key, u.is_active as u_is_active, u.created_at as u_created_at,
+              u.display_name as u_display_name, u.avatar_key as u_avatar_key, u.is_active as u_is_active,
+              u.parent_id as u_parent_id, u.created_at as u_created_at,
               r.id as r_id, r.name as r_name, r.permissions as r_permissions, r.created_at as r_created_at
        FROM sessions s
        JOIN users u ON u.id = s.user_id
@@ -154,6 +214,7 @@ export async function getSessionWithUser(
       display_name: row.u_display_name as string,
       avatar_key: row.u_avatar_key as string | null,
       is_active: row.u_is_active as number,
+      parent_id: (row.u_parent_id as number | null) ?? null,
       created_at: row.u_created_at as string,
     },
     role: {

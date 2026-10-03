@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { requirePermission } from '../../../worker/middleware/auth';
+import { getActiveOwnerByIdentifier } from '../../../worker/db';
 import type { AppBindings } from '../../../worker/types';
 import { generateCode } from './code';
 
@@ -17,6 +18,28 @@ workflowRoutes.get('/track/:code', async (c) => {
     .first();
   if (!row) return c.json({ error: 'not_found' }, 404);
   return c.json({ transaction: row });
+});
+
+// Public: the read-only view reached from an owner's card on the homepage
+// (see src/components/OwnersList.tsx → /owner/:identifier, aliased from
+// /plugins/workflow/:identifier). identifier is either the owner's id or
+// their display_name — see getActiveOwnerByIdentifier. Same created_by
+// scoping as the authenticated /transactions above — an owner's own
+// transactions are exactly those they registered themselves — but with
+// customer_contact/created_by left out, matching the /track/:code redaction
+// above, and no create/status-edit access.
+workflowRoutes.get('/owners/:identifier/transactions', async (c) => {
+  const owner = await getActiveOwnerByIdentifier(c.env.DB, c.req.param('identifier'));
+  if (!owner) return c.json({ error: 'not_found' }, 404);
+
+  const { results } = await c.env.DB
+    .prepare(
+      `SELECT id, code, customer_name, description, status, created_at, updated_at
+       FROM workflow_transactions WHERE created_by = ? ORDER BY created_at DESC, id DESC`,
+    )
+    .bind(owner.id)
+    .all();
+  return c.json({ owner_id: owner.id, owner_display_name: owner.display_name, transactions: results });
 });
 
 const STATUSES = new Set(['hold', 'in_progress', 'done', 'ready_to_pickup']);

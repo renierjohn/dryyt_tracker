@@ -12,10 +12,13 @@ import helloManifest from '../plugins/hello/manifest';
 import helloRoutes from '../plugins/hello/backend/routes';
 import workflowManifest from '../plugins/workflow/manifest';
 import workflowRoutes from '../plugins/workflow/backend/routes';
+import themeManifest from '../plugins/theme/manifest';
+import themeRoutes from '../plugins/theme/backend/routes';
 
 const registrations: { manifest: PluginManifest; router: Hono<AppBindings> }[] = [
   { manifest: helloManifest, router: helloRoutes },
   { manifest: workflowManifest, router: workflowRoutes },
+  { manifest: themeManifest, router: themeRoutes },
 ];
 
 export const pluginRouters: { path: string; router: Hono<AppBindings> }[] = registrations

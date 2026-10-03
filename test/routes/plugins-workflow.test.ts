@@ -1,6 +1,6 @@
 import { SELF } from 'cloudflare:test';
 import { describe, it, expect } from 'vitest';
-import { createUserWithRoleAndLogin, getAdminRoleId } from '../helpers';
+import { createUserWithRoleAndLogin, getAdminRoleId, getOwnerRoleId } from '../helpers';
 
 function req(method: string, path: string, body?: unknown, cookie?: string) {
   return SELF.fetch(`https://example.com${path}`, {
@@ -117,6 +117,56 @@ describe('GET /api/plugins/workflow/track/:code', () => {
 
   it('returns 404 for an unknown code', async () => {
     const res = await SELF.fetch('https://example.com/api/plugins/workflow/track/ZZZZZZ');
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('GET /api/plugins/workflow/owners/:ownerId/transactions', () => {
+  it("lists an owner's own transactions with no auth required, omitting contact/created_by", async () => {
+    const ownerRoleId = await getOwnerRoleId();
+    const ownerCookie = await createUserWithRoleAndLogin('workflow-public-owner@example.com', ownerRoleId, 'Owner');
+    const me = (await (await req('GET', '/api/auth/me', undefined, ownerCookie)).json()) as { user: { id: number } };
+
+    await req('POST', '/api/plugins/workflow/transactions', {
+      customer_name: 'Public Target', customer_contact: 'secret@example.com', description: 'Shoes',
+    }, ownerCookie);
+
+    const res = await SELF.fetch(`https://example.com/api/plugins/workflow/owners/${me.user.id}/transactions`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { owner_display_name: string; transactions: Array<Record<string, unknown>> };
+    expect(body.owner_display_name).toBe('Owner');
+    expect(body.transactions).toHaveLength(1);
+    expect(body.transactions[0].customer_name).toBe('Public Target');
+    expect(body.transactions[0].customer_contact).toBeUndefined();
+    expect(body.transactions[0].created_by).toBeUndefined();
+  });
+
+  it('returns 404 for a non-owner user id', async () => {
+    const plainCookie = await createUserWithRoleAndLogin('workflow-public-plain@example.com', 2, 'Plain');
+    const me = (await (await req('GET', '/api/auth/me', undefined, plainCookie)).json()) as { user: { id: number } };
+    const res = await SELF.fetch(`https://example.com/api/plugins/workflow/owners/${me.user.id}/transactions`);
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 404 for an unknown owner id', async () => {
+    const res = await SELF.fetch('https://example.com/api/plugins/workflow/owners/999999/transactions');
+    expect(res.status).toBe(404);
+  });
+
+  it('also resolves by the owner\'s display_name (the /owner/:identifier alias)', async () => {
+    const ownerRoleId = await getOwnerRoleId();
+    const ownerCookie = await createUserWithRoleAndLogin('workflow-public-byname@example.com', ownerRoleId, 'NameLookupOwner');
+    await req('POST', '/api/plugins/workflow/transactions', { customer_name: 'By Name' }, ownerCookie);
+
+    const res = await SELF.fetch('https://example.com/api/plugins/workflow/owners/NameLookupOwner/transactions');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { owner_display_name: string; transactions: Array<{ customer_name: string }> };
+    expect(body.owner_display_name).toBe('NameLookupOwner');
+    expect(body.transactions[0].customer_name).toBe('By Name');
+  });
+
+  it('returns 404 for an unknown display_name', async () => {
+    const res = await SELF.fetch('https://example.com/api/plugins/workflow/owners/NoSuchOwner/transactions');
     expect(res.status).toBe(404);
   });
 });

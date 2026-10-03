@@ -6,3 +6,5 @@
 export * from './types';
 export * from './slots';
 export { apiFetch, ApiError } from '../src/lib/api';
+export { useCurrentUser } from '../src/lib/useCurrentUser';
+export { hasPermission } from '../src/lib/permissions';
