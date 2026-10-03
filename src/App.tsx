@@ -34,7 +34,7 @@ function App() {
         <Route path="/" element={<Home user={user} refresh={refresh} />} />
         <Route
           path="/login"
-          element={user ? <Navigate to="/" replace /> : <Login onLoggedIn={refresh} />}
+          element={user ? <Navigate to="/dashboard" replace /> : <Login onLoggedIn={refresh} />}
         />
         <Route
           path="/register"

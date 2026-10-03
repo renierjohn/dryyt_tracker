@@ -1,6 +1,8 @@
 import { type FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch, ApiError } from '../lib/api';
+import { isSuperadmin } from '../lib/permissions';
+import type { AuthUser } from '../lib/useCurrentUser';
 import AppShell from '../components/AppShell';
 import '../assets/sass/auth-form.scss';
 
@@ -14,9 +16,9 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => Promise<void> 
     e.preventDefault();
     setError(null);
     try {
-      await apiFetch('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+      const { user } = await apiFetch<{ user: AuthUser }>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
       await onLoggedIn();
-      navigate('/');
+      navigate(isSuperadmin(user) ? '/admin' : '/dashboard', { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.code : 'unknown_error');
     }
