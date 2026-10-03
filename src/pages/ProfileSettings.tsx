@@ -109,8 +109,8 @@ function ProfileForm({ user, refresh }: { user: AuthUser; refresh: () => Promise
 }
 
 function PasswordForm() {
-  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -118,13 +118,17 @@ function PasswordForm() {
     e.preventDefault();
     setError(null);
     setSaved(false);
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
     try {
       await apiFetch('/profile/password', {
         method: 'PUT',
-        body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+        body: JSON.stringify({ new_password: newPassword }),
       });
-      setCurrentPassword('');
       setNewPassword('');
+      setConfirmPassword('');
       setSaved(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.code : 'unknown_error');
@@ -138,12 +142,12 @@ function PasswordForm() {
         {error && <p role="alert">{error}</p>}
         {saved && <p className="dashboard__saved">Password changed.</p>}
         <label>
-          Current password
-          <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required />
+          New Password
+          <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} autoComplete="new-password" />
         </label>
         <label>
-          New password
-          <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} />
+          Confirm Password
+          <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={8} autoComplete="new-password" />
         </label>
         <button className="dashboard__button" type="submit">Change password</button>
       </form>

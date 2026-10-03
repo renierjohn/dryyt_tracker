@@ -1,46 +1,98 @@
 {
-  "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "dryyt-tracker",
-  "main": "worker/index.ts",
-  "compatibility_date": "2026-08-21",
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "dryyt-tracker-db",
-      "database_id": "f6aae4ea-9b19-42fd-b141-d90c0dfbd1fd",
-      "migrations_dir": "./migrations"
-    }
-  ],
-  "r2_buckets": [
-    { "binding": "AVATARS", "bucket_name": "dryyt-tracker-avatars" },
-    { "binding": "TRANSACTION_IMAGES", "bucket_name": "dryyt-tracker-transaction-images" }
-  ],
-  "vars": {
-    "DEV_MODE": "false"
-  },
-  "assets": {
-    "directory": "./dist",
-    "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"]
-  },
-  "env": {
-    "production": {
-      "name": "dryyt-tracker",
-      "d1_databases": [
-        {
-          "binding": "DB",
-          "database_name": "dryyt-tracker-db",
-          "database_id": "f6aae4ea-9b19-42fd-b141-d90c0dfbd1fd",
-          "migrations_dir": "./migrations"
-        }
-      ],
-      "r2_buckets": [
-        { "binding": "AVATARS", "bucket_name": "dryyt-tracker-avatars" },
-    { "binding": "TRANSACTION_IMAGES", "bucket_name": "dryyt-tracker-transaction-images" }
-      ],
-      "vars": {
-        "DEV_MODE": "false"
-      }
-    }
-  }
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "dryyt-tracker",
+	"main": "worker/index.ts",
+	"compatibility_date": "2026-08-21",
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "dryyt-tracker-local-db",
+			"database_id": "STAGING_DB_ID",
+			"migrations_dir": "./migrations"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "AVATARS",
+			"bucket_name": "dryyt-tracker-staging-avatars"
+		},
+		{
+			"binding": "TRANSACTION_IMAGES",
+			"bucket_name": "dryyt-tracker-staging-transaction-images"
+		}
+	],
+	"vars": {
+		"DEV_MODE": "false"
+	},
+	"assets": {
+		"directory": "./dist",
+		"not_found_handling": "single-page-application",
+		"run_worker_first": [
+			"/api/*"
+		]
+	},
+	"env": {
+		// Staging: separate D1 + R2 so nothing here touches production data.
+		// database_id is filled in after `wrangler d1 create dryyt-tracker-staging-db`.
+		"staging": {
+			"name": "dryyt-tracker-staging",
+			"routes": [
+				{
+					"pattern": "app-demo.dryyt.com",
+					"custom_domain": true
+				}
+			],
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "dryyt-tracker-staging-db",
+					"database_id": "97492910-852e-4fad-ac34-a0fafab0072c",
+					"migrations_dir": "./migrations"
+				}
+			],
+			"r2_buckets": [
+				{
+					"binding": "AVATARS",
+					"bucket_name": "dryyt-tracker-staging-avatars"
+				},
+				{
+					"binding": "TRANSACTION_IMAGES",
+					"bucket_name": "dryyt-tracker-staging-transaction-images"
+				}
+			],
+			"vars": {
+				"DEV_MODE": "false"
+			}
+		},
+		"production": {
+			"name": "dryyt-tracker",
+			"routes": [
+				{
+					"pattern": "app.dryyt.com",
+					"custom_domain": true
+				}
+			],
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "dryyt-tracker-db",
+					"database_id": "f6aae4ea-9b19-42fd-b141-d90c0dfbd1fd",
+					"migrations_dir": "./migrations"
+				}
+			],
+			"r2_buckets": [
+				{
+					"binding": "AVATARS",
+					"bucket_name": "dryyt-tracker-avatars"
+				},
+				{
+					"binding": "TRANSACTION_IMAGES",
+					"bucket_name": "dryyt-tracker-transaction-images"
+				}
+			],
+			"vars": {
+				"DEV_MODE": "false"
+			}
+		}
+	}
 }

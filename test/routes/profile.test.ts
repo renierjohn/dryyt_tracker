@@ -80,19 +80,19 @@ describe('PUT /api/profile', () => {
 });
 
 describe('PUT /api/profile/password', () => {
-  it('changes the password with the correct current password', async () => {
+  it('changes the password without requiring the current password', async () => {
     const cookie = await registerAndLogin('pw-change@example.com', 'PW Change');
-    const res = await put('/api/profile/password', { current_password: 'password123', new_password: 'newpassword456' }, cookie);
+    const res = await put('/api/profile/password', { new_password: 'newpassword456' }, cookie);
     expect(res.status).toBe(200);
 
     const loginRes = await post('/api/auth/login', { email: 'pw-change@example.com', password: 'newpassword456' });
     expect(loginRes.status).toBe(200);
   });
 
-  it('rejects the wrong current password with 401', async () => {
-    const cookie = await registerAndLogin('pw-wrong@example.com', 'PW Wrong');
-    const res = await put('/api/profile/password', { current_password: 'wrong-password', new_password: 'newpassword456' }, cookie);
-    expect(res.status).toBe(401);
+  it('rejects a password shorter than 8 characters with 400', async () => {
+    const cookie = await registerAndLogin('pw-weak@example.com', 'PW Weak');
+    const res = await put('/api/profile/password', { new_password: 'short' }, cookie);
+    expect(res.status).toBe(400);
   });
 
   it('invalidates other sessions but keeps the current one', async () => {
@@ -100,7 +100,7 @@ describe('PUT /api/profile/password', () => {
     const otherLoginRes = await post('/api/auth/login', { email: 'pw-sessions@example.com', password: 'password123' });
     const otherCookie = extractCookie(otherLoginRes);
 
-    const pwChangeRes = await put('/api/profile/password', { current_password: 'password123', new_password: 'newpassword456' }, cookie);
+    const pwChangeRes = await put('/api/profile/password', { new_password: 'newpassword456' }, cookie);
     const newCookie = extractCookie(pwChangeRes);
 
     const currentStillWorks = await SELF.fetch('https://example.com/api/auth/me', { headers: { Cookie: newCookie } });

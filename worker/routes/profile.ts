@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { hashPassword, verifyPassword, generateToken } from '../crypto';
+import { hashPassword, generateToken } from '../crypto';
 import { getUserByEmail, getUserById, updateUserProfile, updatePasswordHash, deleteSessionsForUser, setUserAvatarKey } from '../db';
 import { requireAuth, createAndSetSession } from '../middleware/auth';
 import { isValidEmail, isValidContactNumber, toPublicUser } from '../util';
@@ -58,14 +58,9 @@ profileRoutes.put('/', async (c) => {
 profileRoutes.put('/password', async (c) => {
   const authUser = c.get('user')!;
   const body = await c.req.json().catch(() => null);
-  const currentPassword = typeof body?.current_password === 'string' ? body.current_password : '';
   const newPassword = typeof body?.new_password === 'string' ? body.new_password : '';
 
   if (newPassword.length < 8) return c.json({ error: 'weak_password' }, 400);
-
-  const user = await getUserById(c.env.DB, authUser.id);
-  const valid = await verifyPassword(currentPassword, user!.password_hash, user!.password_salt);
-  if (!valid) return c.json({ error: 'invalid_credentials' }, 401);
 
   const { hash, salt } = await hashPassword(newPassword);
   await updatePasswordHash(c.env.DB, authUser.id, hash, salt);
