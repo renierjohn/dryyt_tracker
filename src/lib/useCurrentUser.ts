@@ -25,7 +25,11 @@ export function useCurrentUser() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const body = await apiFetch<{ user: AuthUser; masquerade: Masquerade | null }>('/auth/me');
+      const body = await apiFetch<{ user: AuthUser; masquerade: Masquerade | null }>('/auth/me', {
+        // API GETs are cacheable for 60s (worker/middleware/cache.ts); the session
+        // check must always revalidate or login/logout/masquerade look stale.
+        cache: 'no-cache',
+      });
       setUser(body.user);
       setMasquerade(body.masquerade);
     } catch (err) {

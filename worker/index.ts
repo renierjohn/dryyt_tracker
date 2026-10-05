@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { loadSession } from './middleware/auth';
+import { cacheControl } from './middleware/cache';
 import { authRoutes } from './routes/auth';
 import { profileRoutes } from './routes/profile';
 import { avatarRoutes } from './routes/avatars';
@@ -14,6 +15,7 @@ import type { AppBindings } from './types';
 const app = new Hono<AppBindings>();
 
 app.use('*', loadSession);
+app.use('*', cacheControl);
 app.route('/api/auth', authRoutes);
 app.route('/api/profile', profileRoutes);
 app.route('/api/avatars', avatarRoutes);
