@@ -1,7 +1,10 @@
+// Route config, not a component module — lazy() page consts are fine here.
+/* eslint-disable react-refresh/only-export-components */
+import { lazy } from 'react';
 import type { PluginRoute } from '../../sdk';
-import WorkflowAdminPage from './pages/WorkflowAdminPage';
-import PublicWorkflowPage from './pages/PublicWorkflowPage';
-import ScanPickupPage from './pages/ScanPickupPage';
+const WorkflowAdminPage = lazy(() => import('./pages/WorkflowAdminPage'));
+const PublicWorkflowPage = lazy(() => import('./pages/PublicWorkflowPage'));
+const ScanPickupPage = lazy(() => import('./pages/ScanPickupPage'));
 
 const routes: PluginRoute[] = [
   // Any signed-in user: owners (manage_users) get the admin view, everyone
