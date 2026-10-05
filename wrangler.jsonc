@@ -6,19 +6,19 @@
 	"d1_databases": [
 		{
 			"binding": "DB",
-			"database_name": "dryyt-tracker-local-db",
-			"database_id": "STAGING_DB_ID",
+			"database_name": "dryyt-tracker-db",
+			"database_id": "f6aae4ea-9b19-42fd-b141-d90c0dfbd1fd",
 			"migrations_dir": "./migrations"
 		}
 	],
 	"r2_buckets": [
 		{
 			"binding": "AVATARS",
-			"bucket_name": "dryyt-tracker-staging-avatars"
+			"bucket_name": "dryyt-tracker-avatars"
 		},
 		{
 			"binding": "TRANSACTION_IMAGES",
-			"bucket_name": "dryyt-tracker-staging-transaction-images"
+			"bucket_name": "dryyt-tracker-transaction-images"
 		}
 	],
 	"vars": {
