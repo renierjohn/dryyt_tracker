@@ -7,3 +7,8 @@
 # wrangler.jsonc's committed default is "false" (production-safe); set it to
 # "true" here so you can see reset links while developing locally.
 DEV_MODE=true
+
+# Turnstile secret for the login/register forms (pairs with the sitekey in
+# src/lib/useTurnstile.ts). Leave unset to skip verification locally (DEV_MODE
+# only); deployed envs get it via `wrangler secret put TURNSTILE_SECRET_KEY --env <env>`.
+TURNSTILE_SECRET_KEY=

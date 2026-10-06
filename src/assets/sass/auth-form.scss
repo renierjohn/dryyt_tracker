@@ -37,6 +37,11 @@
     }
   }
 
+  // Collapsed until Turnstile actually needs the user to interact.
+  &__turnstile:empty {
+    display: none;
+  }
+
   &__error {
     color: #dc2626;
     background: rgba(220, 38, 38, 0.1);

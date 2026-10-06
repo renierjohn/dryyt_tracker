@@ -8,6 +8,7 @@ import {
 } from '../db';
 import { createAndSetSession, requireAuth, clearSession, returnFromMasquerade } from '../middleware/auth';
 import { isValidEmail, toPublicUser } from '../util';
+import { verifyTurnstile } from '../turnstile';
 import type { AppBindings } from '../types';
 
 export const authRoutes = new Hono<AppBindings>();
@@ -17,6 +18,10 @@ authRoutes.post('/register', async (c) => {
   const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
   const password = typeof body?.password === 'string' ? body.password : '';
   const displayName = typeof body?.display_name === 'string' ? body.display_name.trim() : '';
+
+  if (!(await verifyTurnstile(c.env, c.req.raw, body?.turnstile_token, 'register'))) {
+    return c.json({ error: 'turnstile_failed' }, 403);
+  }
 
   if (!isValidEmail(email)) return c.json({ error: 'invalid_email' }, 400);
   if (password.length < 8) return c.json({ error: 'weak_password' }, 400);
@@ -47,6 +52,10 @@ authRoutes.post('/login', async (c) => {
   const body = await c.req.json().catch(() => null);
   const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
   const password = typeof body?.password === 'string' ? body.password : '';
+
+  if (!(await verifyTurnstile(c.env, c.req.raw, body?.turnstile_token, 'login'))) {
+    return c.json({ error: 'turnstile_failed' }, 403);
+  }
 
   const user = await getUserByEmail(c.env.DB, email);
   if (!user) return c.json({ error: 'invalid_credentials' }, 401);
