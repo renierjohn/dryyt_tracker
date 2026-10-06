@@ -43,3 +43,10 @@ export function formatTime(hhmm: string) {
 export function todayKey(): Weekday {
   return WEEKDAYS[(new Date().getDay() + 6) % 7];
 }
+
+// Google Maps embed searched by text. Prefixing the owner's name lets Google
+// match the business listing; coordinates are the fallback when there's no address.
+export function googleEmbedUrl(name: string | null | undefined, address: string | null, lat: number | null, lng: number | null) {
+  const q = address ? [name, address].filter(Boolean).join(' ') : lat != null && lng != null ? `${lat},${lng}` : '';
+  return q ? `https://maps.google.com/maps?${new URLSearchParams({ q, z: '17', output: 'embed' })}` : null;
+}

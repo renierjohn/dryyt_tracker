@@ -108,6 +108,7 @@ export default function AdminConsole({ user, refresh }: { user: AuthUser; refres
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [alertTarget, setAlertTarget] = useState<AdminUser | null>(null);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [deactivateTarget, setDeactivateTarget] = useState<AdminUser | null>(null);
 
   const debouncedQuery = useDebounced(query.trim(), 300);
   const userList = usePagedList<UsersResponse>('/admin/users', {
@@ -147,7 +148,7 @@ export default function AdminConsole({ user, refresh }: { user: AuthUser; refres
   }
 
   function handleDeactivate(u: AdminUser) {
-    if (!window.confirm(`Deactivate ${u.display_name}? They will be signed out and can’t log in.`)) return;
+    setDeactivateTarget(null);
     void run(() => apiFetch(`/admin/users/${u.id}/deactivate`, { method: 'POST' }), `${u.display_name} deactivated.`);
   }
 
@@ -312,7 +313,7 @@ export default function AdminConsole({ user, refresh }: { user: AuthUser; refres
                                 <button
                                   type="button"
                                   className="admin__action admin__action--danger"
-                                  onClick={() => handleDeactivate(u)}
+                                  onClick={() => setDeactivateTarget(u)}
                                   disabled={u.id === 1}
                                 >
                                   Deactivate
@@ -367,9 +368,29 @@ export default function AdminConsole({ user, refresh }: { user: AuthUser; refres
           />
         </Dialog>
       )}
+
+      {deactivateTarget && (
+        <Dialog title={`Deactivate ${deactivateTarget.display_name}?`} onClose={() => setDeactivateTarget(null)}>
+          <p>They will be signed out and can’t log in until reactivated.</p>
+          <div className="admin__dialog-actions">
+            <button type="button" className="m3-button m3-button--tonal" onClick={() => setDeactivateTarget(null)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="m3-button admin__dialog-danger"
+              onClick={() => handleDeactivate(deactivateTarget)}
+            >
+              Deactivate
+            </button>
+          </div>
+        </Dialog>
+      )}
     </AppShell>
   );
 }
+
+const PURGE_PATH = '/plugins/workflow/admin/transactions/purge-old';
 
 // All transactions across owners, from the workflow plugin's superadmin endpoint.
 function TransactionsPanel() {
@@ -379,6 +400,7 @@ function TransactionsPanel() {
   const [purging, setPurging] = useState(false);
   const [purgeError, setPurgeError] = useState<string | null>(null);
   const [purgeNotice, setPurgeNotice] = useState<string | null>(null);
+  const [purgeConfirm, setPurgeConfirm] = useState<PurgeResult | null>(null);
   // How many transactions are past the 3-month mark (a dry-run count), shown
   // as a warning until they're deleted.
   const [stale, setStale] = useState<PurgeResult | null>(null);
@@ -386,7 +408,7 @@ function TransactionsPanel() {
 
   useEffect(() => {
     let cancelled = false;
-    apiFetch<PurgeResult>('/plugins/workflow/admin/transactions/purge-old', {
+    apiFetch<PurgeResult>(PURGE_PATH, {
       method: 'POST',
       body: JSON.stringify({ dry_run: true }),
     })
@@ -406,29 +428,31 @@ function TransactionsPanel() {
   });
   const transactions = list.body?.transactions ?? [];
 
-  // Deletes every transaction created over 3 months ago —
-  // after showing how many that is.
+  // Counts transactions created over 3 months ago, then asks to confirm
+  // deleting them.
   async function handlePurge() {
     setPurgeError(null);
     setPurgeNotice(null);
     setPurging(true);
     try {
-      const path = '/plugins/workflow/admin/transactions/purge-old';
-      const preview = await apiFetch<PurgeResult>(path, { method: 'POST', body: JSON.stringify({ dry_run: true }) });
+      const preview = await apiFetch<PurgeResult>(PURGE_PATH, { method: 'POST', body: JSON.stringify({ dry_run: true }) });
       if (preview.transactions === 0) {
         setPurgeNotice('No transactions are older than 3 months.');
         return;
       }
-      const before = formatDateTime(preview.cutoff);
-      if (
-        !window.confirm(
-          `Permanently delete ${preview.transactions} transaction(s) created before ${before}? ` +
-            'This can’t be undone.',
-        )
-      ) {
-        return;
-      }
-      const done = await apiFetch<PurgeResult>(path, { method: 'POST', body: JSON.stringify({}) });
+      setPurgeConfirm(preview);
+    } catch (err) {
+      setPurgeError(errorMessage(err));
+    } finally {
+      setPurging(false);
+    }
+  }
+
+  async function confirmPurge() {
+    setPurgeConfirm(null);
+    setPurging(true);
+    try {
+      const done = await apiFetch<PurgeResult>(PURGE_PATH, { method: 'POST', body: JSON.stringify({}) });
       setPurgeNotice(`Deleted ${done.transactions} transaction(s).`);
       list.reload();
       setStaleTick((t) => t + 1);
@@ -544,6 +568,22 @@ function TransactionsPanel() {
         <Pagination {...list} label="Transactions pages" />
       </div>
       {openId !== null && <TransactionDetailsDialog id={openId} onClose={() => setOpenId(null)} />}
+      {purgeConfirm && (
+        <Dialog title="Delete old transactions?" onClose={() => setPurgeConfirm(null)}>
+          <p>
+            Permanently delete {purgeConfirm.transactions} transaction(s) created before{' '}
+            {formatDateTime(purgeConfirm.cutoff)}? This can’t be undone.
+          </p>
+          <div className="admin__dialog-actions">
+            <button type="button" className="m3-button m3-button--tonal" onClick={() => setPurgeConfirm(null)}>
+              Cancel
+            </button>
+            <button type="button" className="m3-button admin__dialog-danger" onClick={() => void confirmPurge()}>
+              Delete
+            </button>
+          </div>
+        </Dialog>
+      )}
     </>
   );
 }

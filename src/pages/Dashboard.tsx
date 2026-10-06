@@ -48,7 +48,7 @@ export default function Dashboard({ user, refresh }: { user: AuthUser; refresh: 
         </div>
 
         {tab === 'users' && showUsersTab && <OwnerUsers />}
-        {tab === 'store' && showUsersTab && <StoreSettings />}
+        {tab === 'store' && showUsersTab && <StoreSettings ownerName={user.display_name} />}
         {tab === 'alerts' && <AlertsPanel user={user} />}
         {tab === 'profile' && <ProfileSettings user={user} refresh={refresh} />}
 

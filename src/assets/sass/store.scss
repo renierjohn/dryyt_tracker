@@ -1,27 +1,18 @@
-// Store location map + opening hours (StoreMap, StoreSettings, StoreInfo).
+// Store location map + opening hours (StoreSettings, StoreInfo).
 .store-map {
   height: 320px;
   border-radius: 16px;
   overflow: hidden;
-  // Keep Leaflet's panes under the fixed bottom nav bar.
-  isolation: isolate;
   background: var(--code-bg);
+
+  &:is(iframe) {
+    display: block;
+    width: 100%;
+    border: 0;
+  }
 
   &--compact {
     height: 200px;
-  }
-}
-
-.store-map__pin {
-  span {
-    display: block;
-    width: 28px;
-    height: 28px;
-    border: 3px solid #fff;
-    border-radius: 50% 50% 50% 0;
-    background: var(--accent);
-    box-shadow: 0 2px 6px rgba(60, 64, 67, 0.4);
-    transform: rotate(-45deg);
   }
 }
 

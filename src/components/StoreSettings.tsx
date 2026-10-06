@@ -1,32 +1,33 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { apiFetch, ApiError } from '../lib/api';
-import { geocode, reverseGeocode } from '../lib/geocode';
 import {
   WEEKDAYS,
   WEEKDAY_LABELS,
+  googleEmbedUrl,
   defaultOpeningHours,
   type DayHours,
   type OpeningHours,
   type StoreDetails,
   type Weekday,
 } from '../lib/store';
-import StoreMap from './StoreMap';
 
-const GEOCODE_DELAY_MS = 900;
+const MAP_DELAY_MS = 900;
 
-// Dashboard "Store" tab (owners only): address with a live map pin, and weekly
-// opening hours. Typing an address moves the pin; dragging the pin (or clicking
-// the map) fills the address back in.
-export default function StoreSettings() {
+// Dashboard "Store" tab (owners only): address with an embedded Google map, and
+// weekly opening hours. The iframe searches the typed address itself (debounced);
+// being cross-origin it can't hand coordinates back, so editing the address
+// clears any previously saved pin rather than leaving it pointing elsewhere.
+
+export default function StoreSettings({ ownerName }: { ownerName: string }) {
   const [address, setAddress] = useState('');
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
   const [hours, setHours] = useState<OpeningHours>(defaultOpeningHours);
-  const [lookup, setLookup] = useState<'idle' | 'searching' | 'not_found'>('idle');
+  const [mapAddress, setMapAddress] = useState('');
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const pendingRef = useRef<{ timer?: number; abort?: AbortController }>({});
+  const timerRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     async function load() {
@@ -35,6 +36,7 @@ export default function StoreSettings() {
         setAddress(store.address ?? '');
         setLat(store.lat);
         setLng(store.lng);
+        setMapAddress(store.address ?? '');
         if (store.opening_hours) setHours(store.opening_hours);
       } catch (err) {
         setError(err instanceof ApiError ? err.code : 'unknown_error');
@@ -44,68 +46,18 @@ export default function StoreSettings() {
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
-    const pending = pendingRef.current;
-    return () => {
-      window.clearTimeout(pending.timer);
-      pending.abort?.abort();
-    };
+    return () => window.clearTimeout(timerRef.current);
   }, []);
-
-  function cancelPending() {
-    window.clearTimeout(pendingRef.current.timer);
-    pendingRef.current.abort?.abort();
-  }
 
   function handleAddressChange(value: string) {
     setAddress(value);
+    setLat(null);
+    setLng(null);
     setSaved(false);
-    cancelPending();
-    if (value.trim().length < 4) {
-      setLookup('idle');
-      return;
-    }
-    pendingRef.current.timer = window.setTimeout(async () => {
-      const abort = new AbortController();
-      pendingRef.current.abort = abort;
-      setLookup('searching');
-      try {
-        const hit = await geocode(value.trim(), abort.signal);
-        if (hit) {
-          setLat(hit.lat);
-          setLng(hit.lng);
-          setLookup('idle');
-        } else {
-          setLookup('not_found');
-        }
-      } catch (err) {
-        if (!abort.signal.aborted) {
-          console.error('Geocoding failed', err);
-          setLookup('idle');
-        }
-      }
-    }, GEOCODE_DELAY_MS);
+    window.clearTimeout(timerRef.current);
+    const query = value.trim();
+    timerRef.current = window.setTimeout(() => setMapAddress(query.length >= 4 ? query : ''), MAP_DELAY_MS);
   }
-
-  const handlePinMove = useCallback(async (nextLat: number, nextLng: number) => {
-    window.clearTimeout(pendingRef.current.timer);
-    pendingRef.current.abort?.abort();
-    setLat(nextLat);
-    setLng(nextLng);
-    setSaved(false);
-    const abort = new AbortController();
-    pendingRef.current.abort = abort;
-    setLookup('searching');
-    try {
-      const found = await reverseGeocode(nextLat, nextLng, abort.signal);
-      if (found) setAddress(found);
-      setLookup('idle');
-    } catch (err) {
-      if (!abort.signal.aborted) {
-        console.error('Reverse geocoding failed', err);
-        setLookup('idle');
-      }
-    }
-  }, []);
 
   function updateDay(day: Weekday, patch: Partial<DayHours>) {
     setHours((prev) => ({ ...prev, [day]: { ...prev[day], ...patch } }));
@@ -127,6 +79,8 @@ export default function StoreSettings() {
     }
   }
 
+  const mapUrl = googleEmbedUrl(ownerName, mapAddress, lat, lng);
+
   if (!loaded) return <p className="m3-supporting">Loading…</p>;
 
   return (
@@ -145,14 +99,18 @@ export default function StoreSettings() {
             autoComplete="street-address"
           />
         </label>
-        <p className="store__hint" aria-live="polite">
-          {lookup === 'searching'
-            ? 'Finding on map…'
-            : lookup === 'not_found'
-              ? 'Couldn’t find that address — try adding the city, or drag the pin.'
-              : 'Drag the pin or tap the map to fine-tune.'}
-        </p>
-        <StoreMap lat={lat} lng={lng} onMove={handlePinMove} />
+        <p className="store__hint">Type the full address; the map updates when you stop typing.</p>
+        {mapUrl ? (
+          <iframe
+            className="store-map"
+            title="Store location"
+            src={mapUrl}
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+          />
+        ) : (
+          <div className="store-map" />
+        )}
       </section>
 
       <section className="dashboard__section">

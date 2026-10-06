@@ -1,7 +1,7 @@
 import { lazy, Suspense, type ComponentProps } from 'react';
 
 // plugins/sdk.ts is a barrel that eagerly-loaded plugin slots (e.g. the theme
-// plugin's ThemeApplier) import from. Re-exporting CKEditor/Leaflet components
+// plugin's ThemeApplier) import from. Re-exporting CKEditor components
 // there statically would drag those libs into the entry chunk, so the SDK
 // exposes these lazy wrappers instead — each lib loads only when rendered.
 const RichTextEditorImpl = lazy(() => import('./RichTextEditor'));
