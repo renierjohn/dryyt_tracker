@@ -6,6 +6,7 @@ import { isValidEmail, isValidContactNumber, toPublicUser } from '../util';
 import { getRoleById } from '../db';
 import { detectImageMimeType } from '../image';
 import type { AppBindings } from '../types';
+import { parseSocialLinks, readSocialLinks } from '../socialLinks';
 
 export const profileRoutes = new Hono<AppBindings>();
 
@@ -16,6 +17,11 @@ profileRoutes.get('/', async (c) => {
   const user = await getUserById(c.env.DB, authUser.id);
   const role = await getRoleById(c.env.DB, user!.role_id);
   return c.json({ user: toPublicUser(user!, role!) });
+});
+
+profileRoutes.get('/social-links', async (c) => {
+  const user = await getUserById(c.env.DB, c.get('user')!.id);
+  return c.json({ social_links: readSocialLinks(user!.social_links ?? null) });
 });
 
 profileRoutes.put('/', async (c) => {
@@ -30,6 +36,9 @@ profileRoutes.put('/', async (c) => {
   if (contactNumber && !isValidContactNumber(contactNumber)) {
     return c.json({ error: 'invalid_contact_number' }, 400);
   }
+  // Optional: the full list, replacing what's stored; [] clears it.
+  const socialLinks = body?.social_links === undefined ? undefined : parseSocialLinks(body.social_links);
+  if (socialLinks === null) return c.json({ error: 'invalid_social_links' }, 400);
 
   if (email !== undefined) {
     if (!isValidEmail(email)) return c.json({ error: 'invalid_email' }, 400);
@@ -44,7 +53,12 @@ profileRoutes.put('/', async (c) => {
 
   let updated;
   try {
-    updated = await updateUserProfile(c.env.DB, authUser.id, { displayName, email, contactNumber });
+    updated = await updateUserProfile(c.env.DB, authUser.id, {
+      displayName,
+      email,
+      contactNumber,
+      socialLinks: socialLinks === undefined ? undefined : socialLinks.length ? JSON.stringify(socialLinks) : null,
+    });
   } catch (err) {
     if (err instanceof Error && err.message.includes('UNIQUE')) {
       return c.json({ error: 'email_taken' }, 409);
@@ -52,7 +66,7 @@ profileRoutes.put('/', async (c) => {
     throw err;
   }
   const role = await getRoleById(c.env.DB, updated.role_id);
-  return c.json({ user: toPublicUser(updated, role!) });
+  return c.json({ user: toPublicUser(updated, role!), social_links: readSocialLinks(updated.social_links ?? null) });
 });
 
 profileRoutes.put('/password', async (c) => {

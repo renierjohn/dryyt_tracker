@@ -64,6 +64,45 @@ describe('PUT /api/profile', () => {
     expect(((await res.json()) as { user: { contact_number: string | null } }).user.contact_number).toBeNull();
   });
 
+  it('sets, normalizes, keeps and clears social_links', async () => {
+    const cookie = await registerAndLogin('profile-social@example.com', 'Social');
+    let res = await put('/api/profile', {
+      social_links: [
+        { platform: 'facebook', url: ' facebook.com/myshop ' },
+        { platform: 'website', url: '' },
+        { platform: 'instagram', url: 'https://instagram.com/myshop' },
+      ],
+    }, cookie);
+    expect(res.status).toBe(200);
+    const expected = [
+      { platform: 'facebook', url: 'https://facebook.com/myshop' },
+      { platform: 'instagram', url: 'https://instagram.com/myshop' },
+    ];
+    expect(((await res.json()) as { social_links: unknown }).social_links).toEqual(expected);
+
+    await put('/api/profile', { display_name: 'Social 2' }, cookie);
+    const get = () => SELF.fetch('https://example.com/api/profile/social-links', { headers: { Cookie: cookie } });
+    expect(((await (await get()).json()) as { social_links: unknown }).social_links).toEqual(expected);
+
+    await put('/api/profile', { social_links: [] }, cookie);
+    expect(((await (await get()).json()) as { social_links: unknown }).social_links).toEqual([]);
+  });
+
+  it('rejects invalid social_links with 400', async () => {
+    const cookie = await registerAndLogin('profile-social-bad@example.com', 'Social Bad');
+    for (const social_links of [
+      [{ platform: 'facebook', url: 'javascript:alert(1)' }],
+      [{ platform: 'myspace', url: 'https://myspace.com/x' }],
+      [{ platform: 'facebook', url: 'not a url' }],
+      Array.from({ length: 11 }, (_, i) => ({ platform: 'website', url: `https://example.com/${i}` })),
+      'facebook.com',
+    ]) {
+      const res = await put('/api/profile', { social_links }, cookie);
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as { error: string }).error).toBe('invalid_social_links');
+    }
+  });
+
   it('rejects an invalid contact_number with 400', async () => {
     const cookie = await registerAndLogin('profile-phone-bad@example.com', 'Phone Bad');
     const res = await put('/api/profile', { contact_number: 'call me' }, cookie);

@@ -20,6 +20,7 @@ import { formatDateTime } from '../datetime';
 import { formatWeight } from '../weight';
 import { printReceipt } from '../printReceipt';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { downloadReport, type ReportFormat } from '../exportReport';
 import { STATUS_LABELS } from '../status';
 
 interface Transaction {
@@ -50,6 +51,7 @@ const SUBMIT_ERRORS: Record<string, string> = {
   invalid_weight: 'Weight must be a number greater than 0.',
   invalid_control_number: 'Control number must be digits only.',
   duplicate_control_number: 'That control number is already used.',
+  duplicate_code: 'The printed code was taken in the meantime — print again.',
 };
 
 const customerLabel = (c: Customer) => (c.contact_number ? `${c.display_name}-${c.contact_number}` : c.display_name);
@@ -67,6 +69,7 @@ function AdminView() {
   const [error, setError] = useState<string | null>(null);
   const [lastCode, setLastCode] = useState<string | null>(null);
   const [openTransaction, setOpenTransaction] = useState<Transaction | null>(null);
+  const [downloadOpen, setDownloadOpen] = useState(false);
   // "End" is paginated server-side (it only grows); everything else comes
   // back in one unpaginated list.
   const [ended, setEnded] = useState<PagedTransactions | null>(null);
@@ -118,7 +121,13 @@ function AdminView() {
 
   return (
     <AppShell active="tracker" user={user} refresh={refresh} contentClassName="m3-page">
-      <h1 className="m3-headline">Tracker</h1>
+      <div className="workflow-headline">
+        <h1 className="m3-headline">Tracker</h1>
+        <button type="button" className="m3-button m3-button--tonal" onClick={() => setDownloadOpen(true)}>
+          <Icon name="download" />
+          Download Report
+        </button>
+      </div>
       <section>
         {error && <p className="m3-banner m3-banner--error" role="alert">{error}</p>}
         <RegisterTransactionForm
@@ -162,6 +171,7 @@ function AdminView() {
         })}
       </section>
       {openTransaction && <TransactionDialog transaction={openTransaction} onClose={() => setOpenTransaction(null)} />}
+      {downloadOpen && <DownloadReportDialog onClose={() => setDownloadOpen(false)} />}
     </AppShell>
   );
 }
@@ -257,6 +267,86 @@ function TransactionsTable({
   );
 }
 
+interface ExportRow {
+  control_number: string | null;
+  code: string;
+  customer_name: string;
+  customer_contact: string | null;
+  customer_email: string | null;
+  status: string;
+  created_at: string;
+  done_at: string | null;
+}
+
+const REPORT_HEADER = ['Control Number', 'Code', 'Name', 'Phone', 'Email', 'Status', 'Date Started', 'Date Ended'];
+
+const pad = (n: number) => String(n).padStart(2, '0');
+const localDay = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+// SQLite UTC "YYYY-MM-DD HH:MM:SS" → local "YYYY-MM-DD HH:MM".
+function reportDate(value: string | null): string | null {
+  if (!value) return null;
+  const d = new Date(value.replace(' ', 'T') + 'Z');
+  return `${localDay(d)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// Every one of the owner's transactions, as CSV or Excel.
+function DownloadReportDialog({ onClose }: { onClose: () => void }) {
+  const [format, setFormat] = useState<ReportFormat>('xlsx');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleDownload() {
+    setBusy(true);
+    setError(null);
+    try {
+      const { transactions } = await apiFetch<{ transactions: ExportRow[] }>('/plugins/workflow/transactions/export');
+      const rows = transactions.map((t) => [
+        t.control_number,
+        t.code,
+        t.customer_name,
+        t.customer_contact,
+        t.customer_email,
+        STATUS_LABELS[t.status] ?? t.status,
+        reportDate(t.created_at),
+        reportDate(t.done_at),
+      ]);
+      downloadReport(format, `transactions-${localDay(new Date())}`, REPORT_HEADER, rows);
+      onClose();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.code : 'unknown_error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <ConfirmDialog
+      title="Download report"
+      onCancel={onClose}
+      actions={
+        <button type="button" className="m3-button" onClick={() => void handleDownload()} disabled={busy}>
+          <Icon name="download" />
+          {busy ? 'Preparing…' : 'Download'}
+        </button>
+      }
+    >
+      {error && <p role="alert" className="m3-banner m3-banner--error">{error}</p>}
+      <fieldset className="workflow-report-format">
+        <legend className="m3-supporting">All your transactions, in this format:</legend>
+        <label>
+          <input type="radio" name="report-format" checked={format === 'xlsx'} onChange={() => setFormat('xlsx')} />
+          Excel (.xlsx)
+        </label>
+        <label>
+          <input type="radio" name="report-format" checked={format === 'csv'} onChange={() => setFormat('csv')} />
+          CSV (.csv)
+        </label>
+      </fieldset>
+    </ConfirmDialog>
+  );
+}
+
 interface PagedTransactions {
   transactions: Transaction[];
   total: number;
@@ -349,28 +439,61 @@ function RegisterTransactionForm({ onCreated }: { onCreated: (code: string) => P
   function handleCustomerNameChange(value: string) {
     const match = customers.find((c) => customerLabel(c) === value);
     if (match) {
+      setPrinted(false);
       setCustomerName(match.display_name);
       setCustomerContact(match.contact_number ?? '');
       setCustomerEmail('');
     } else {
+      setPrinted(false);
       setCustomerName(value);
     }
   }
 
   const contactInvalid = isInvalidContact(customerContact);
 
-  // Register (Enter or the Register button) asks first whether to go ahead
-  // without printing; Print registers and then prints the claim slip.
+  // Print only prints the claim slip — under a fresh code and the control
+  // number it shows (pinned into the field) — and Register then saves the
+  // transaction with both. Registering with nothing printed asks first.
+  // Editing what's on the slip afterwards means it needs printing again.
+  const [printedCode, setPrintedCode] = useState<string | null>(null);
+  const [printed, setPrinted] = useState(false);
+  const [printing, setPrinting] = useState(false);
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    setConfirmingNoPrint(true);
+    if (printed) void register();
+    else setConfirmingNoPrint(true);
   }
 
-  function handlePrint() {
-    if (formRef.current?.reportValidity()) void register(true);
+  async function handlePrint() {
+    setConfirmingNoPrint(false);
+    setError(null);
+    if (!formRef.current?.reportValidity() || !user) return;
+    setPrinting(true);
+    try {
+      const code = printedCode ?? (await apiFetch<{ code: string }>('/plugins/workflow/transactions/new-code')).code;
+      const control = controlNumber.trim() || nextControlNumber;
+      setPrintedCode(code);
+      setControlNumber(control);
+      await printReceipt({
+        ownerName: user.display_name,
+        ownerContact: user.contact_number,
+        ownerEmail: user.email,
+        customerName: customerName.trim(),
+        controlNumber: control,
+        weightKg: weight.trim() ? Math.round(Number(weight) * 100) / 100 : null,
+        code,
+      });
+      setPrinted(true);
+    } catch (err) {
+      console.error('Printing failed', err);
+      setError('The slip couldn’t be printed.');
+    } finally {
+      setPrinting(false);
+    }
   }
 
-  async function register(print: boolean) {
+  async function register() {
     setConfirmingNoPrint(false);
     setError(null);
     if (contactInvalid) {
@@ -379,9 +502,7 @@ function RegisterTransactionForm({ onCreated }: { onCreated: (code: string) => P
     }
     setSubmitting(true);
     try {
-      const body = await apiFetch<{
-        transaction: { id: number; code: string; customer_name: string; control_number: string | null; weight_kg: number | null };
-      }>('/plugins/workflow/transactions', {
+      const body = await apiFetch<{ transaction: { id: number; code: string } }>('/plugins/workflow/transactions', {
         method: 'POST',
         body: JSON.stringify({
           customer_name: customerName,
@@ -390,6 +511,7 @@ function RegisterTransactionForm({ onCreated }: { onCreated: (code: string) => P
           description: description || undefined,
           weight_kg: weight.trim() || undefined,
           control_number: controlNumber.trim() || undefined,
+          code: printed ? (printedCode ?? undefined) : undefined,
         }),
       });
       setCustomerName('');
@@ -399,25 +521,11 @@ function RegisterTransactionForm({ onCreated }: { onCreated: (code: string) => P
       setDescription('');
       setWeight('');
       setControlNumber('');
+      setPrintedCode(null);
+      setPrinted(false);
       void loadNextControlNumber();
       if (customerContact.trim() || customerEmail) void loadCustomers();
       await onCreated(body.transaction.code);
-      if (print && user) {
-        const t = body.transaction;
-        // The transaction is saved either way; a failed print can be redone from the browser.
-        printReceipt({
-          ownerName: user.display_name,
-          ownerContact: user.contact_number,
-          ownerEmail: user.email,
-          customerName: t.customer_name,
-          controlNumber: t.control_number,
-          weightKg: t.weight_kg,
-          code: t.code,
-        }).catch((err) => {
-          console.error('Printing failed', err);
-          setError('Registered, but the slip couldn’t be printed.');
-        });
-      }
     } catch (err) {
       setError(
         err instanceof ApiError
@@ -457,7 +565,10 @@ function RegisterTransactionForm({ onCreated }: { onCreated: (code: string) => P
               pattern="\d*"
               placeholder={nextControlNumber}
               value={controlNumber}
-              onChange={(e) => setControlNumber(e.target.value)}
+              onChange={(e) => {
+                setPrinted(false);
+                setControlNumber(e.target.value);
+              }}
             />
           </label>
           <label>
@@ -468,7 +579,10 @@ function RegisterTransactionForm({ onCreated }: { onCreated: (code: string) => P
               min="0.01"
               step="0.01"
               value={weight}
-              onChange={(e) => setWeight(e.target.value)}
+              onChange={(e) => {
+                setPrinted(false);
+                setWeight(e.target.value);
+              }}
             />
           </label>
         </div>
@@ -498,11 +612,11 @@ function RegisterTransactionForm({ onCreated }: { onCreated: (code: string) => P
           />
         </div>
         <div className="workflow-form-actions">
-          <button type="button" className="m3-button m3-button--tonal" onClick={handlePrint} disabled={submitting}>
+          <button type="button" className="m3-button m3-button--tonal" onClick={() => void handlePrint()} disabled={submitting || printing}>
             <Icon name="print" />
             Print
           </button>
-          <button type="submit" className="m3-button" disabled={submitting}>
+          <button type="submit" className="m3-button" disabled={submitting || printing}>
             <Icon name="save" />
             {submitting ? 'Saving…' : 'Register'}
           </button>
@@ -514,11 +628,11 @@ function RegisterTransactionForm({ onCreated }: { onCreated: (code: string) => P
           onCancel={() => setConfirmingNoPrint(false)}
           actions={
             <>
-              <button type="button" className="m3-button m3-button--tonal" onClick={() => void register(true)}>
+              <button type="button" className="m3-button m3-button--tonal" onClick={() => void handlePrint()}>
                 <Icon name="print" />
                 Print
               </button>
-              <button type="button" className="m3-button" onClick={() => void register(false)}>
+              <button type="button" className="m3-button" onClick={() => void register()}>
                 <Icon name="save" />
                 Proceed without print
               </button>

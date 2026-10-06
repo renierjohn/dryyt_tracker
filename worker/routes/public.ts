@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { getUserById, getPublicAlertsForUser, listActiveOwners, getActiveOwnerByIdentifier } from '../db';
 import { parseOpeningHours } from '../store';
 import type { AppBindings } from '../types';
+import { readSocialLinks } from '../socialLinks';
 
 export const publicRoutes = new Hono<AppBindings>();
 
@@ -21,7 +22,7 @@ publicRoutes.get('/owners', async (c) => {
   });
 });
 
-// An owner's public store details, contact info and public alerts (visibility
+// An owner's public store details, contact info, social media links and public alerts (visibility
 // 'public' or 'both'; body_html is sanitized on write), for their
 // /owner/:identifier page.
 publicRoutes.get('/owners/:identifier/store', async (c) => {
@@ -35,6 +36,7 @@ publicRoutes.get('/owners/:identifier/store', async (c) => {
       opening_hours: parseOpeningHours(owner.opening_hours),
     },
     contact: { email: owner.email, contact_number: owner.contact_number },
+    social_links: readSocialLinks(owner.social_links ?? null),
     avatar_key: owner.avatar_key,
     alerts: (await getPublicAlertsForUser(c.env.DB, owner.id)).map((a) => ({
       id: a.id,

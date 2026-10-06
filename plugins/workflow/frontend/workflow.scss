@@ -239,3 +239,35 @@
     margin: 0;
   }
 }
+
+// Tracker title with the "Download Report" button on its right.
+.m3-shell .workflow-headline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  margin-bottom: 20px;
+
+  > .m3-headline {
+    margin: 0;
+  }
+}
+
+.workflow-report-format {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+
+  label {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-size: 14px;
+    cursor: pointer;
+  }
+}

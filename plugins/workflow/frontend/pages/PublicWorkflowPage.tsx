@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { apiFetch, ApiError, useSession, AppShell, RichText, StoreInfo, type StoreDetails } from '../../../sdk';
+import { apiFetch, ApiError, useSession, AppShell, RichText, StoreInfo, SocialLinks, type SocialLink, type StoreDetails } from '../../../sdk';
 import { formatDateTime } from '../datetime';
 import WorkflowAdminPage from './WorkflowAdminPage';
 import TransactionDialog from '../components/TransactionDialog';
@@ -79,6 +79,7 @@ export default function PublicWorkflowPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [store, setStore] = useState<StoreDetails | null>(null);
   const [contact, setContact] = useState<{ email: string; contact_number: string | null } | null>(null);
+  const [socialLinks, setSocialLinks] = useState<SocialLink[]>([]);
   const [avatarKey, setAvatarKey] = useState<string | null>(null);
   const [alerts, setAlerts] = useState<PublicAlert[]>([]);
   const [dismissed, setDismissed] = useState<Set<number>>(loadDismissed);
@@ -109,6 +110,7 @@ export default function PublicWorkflowPage() {
     void apiFetch<{
       store: StoreDetails;
       contact: { email: string; contact_number: string | null };
+      social_links: SocialLink[];
       avatar_key: string | null;
       alerts: PublicAlert[];
     }>(
@@ -118,6 +120,7 @@ export default function PublicWorkflowPage() {
         if (cancelled) return;
         setStore(body.store);
         setContact(body.contact);
+        setSocialLinks(body.social_links);
         setAvatarKey(body.avatar_key);
         setAlerts(body.alerts);
       })
@@ -167,6 +170,7 @@ export default function PublicWorkflowPage() {
           {contact.contact_number && (
             <a href={`tel:${contact.contact_number.replace(/[^\d+]/g, '')}`}>{contact.contact_number}</a>
           )}
+          <SocialLinks links={socialLinks} />
         </p>
       )}
       <section>

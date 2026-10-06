@@ -13,6 +13,8 @@ export interface DbUser {
   lat: number | null;
   lng: number | null;
   opening_hours: string | null;
+  // JSON — see worker/socialLinks.ts. Not read by getSessionWithUser.
+  social_links?: string | null;
   created_at: string;
 }
 
@@ -327,14 +329,16 @@ export async function updateUserProfile(
   db: D1Database,
   userId: number,
   // contactNumber: undefined leaves it unchanged, null clears it.
-  params: { displayName?: string; email?: string; contactNumber?: string | null },
+  // socialLinks (JSON): likewise.
+  params: { displayName?: string; email?: string; contactNumber?: string | null; socialLinks?: string | null },
 ): Promise<DbUser> {
   const result = await db
     .prepare(
       `UPDATE users SET
          display_name = COALESCE(?, display_name),
          email = COALESCE(?, email),
-         contact_number = CASE WHEN ? THEN ? ELSE contact_number END
+         contact_number = CASE WHEN ? THEN ? ELSE contact_number END,
+         social_links = CASE WHEN ? THEN ? ELSE social_links END
        WHERE id = ?
        RETURNING *`,
     )
@@ -343,6 +347,8 @@ export async function updateUserProfile(
       params.email ?? null,
       params.contactNumber !== undefined ? 1 : 0,
       params.contactNumber ?? null,
+      params.socialLinks !== undefined ? 1 : 0,
+      params.socialLinks ?? null,
       userId,
     )
     .first<DbUser>();

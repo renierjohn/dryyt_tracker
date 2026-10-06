@@ -7,3 +7,5 @@ export function generateCode(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(CODE_LENGTH));
   return Array.from(bytes, (b) => ALPHABET[b % ALPHABET.length]).join('');
 }
+
+export const isValidCode = (value: string) => new RegExp(`^[${ALPHABET}]{${CODE_LENGTH}}$`).test(value);

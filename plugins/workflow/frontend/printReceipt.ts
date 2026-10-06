@@ -28,7 +28,8 @@ export async function printReceipt(receipt: Receipt): Promise<void> {
   h1 { margin: 0; font-size: 20px; }
   .owner { margin: 0 0 16px; }
   p { margin: 0; }
-  img { display: block; width: 160px; height: 160px; margin-top: 16px; }
+  .qr { display: flex; flex-direction: column; align-items: flex-end; margin: 16px 8mm 0 0; }
+  img { display: block; width: 160px; height: 160px; }
   .code { font: 600 18px/1.4 ui-monospace, monospace; letter-spacing: 3px; }
 </style></head>
 <body>
@@ -37,8 +38,10 @@ export async function printReceipt(receipt: Receipt): Promise<void> {
   <p>Name: ${escapeHtml(receipt.customerName)}</p>
   <p>Control Number: ${escapeHtml(receipt.controlNumber ?? '—')}</p>
   <p>Weight: ${receipt.weightKg === null ? '—' : `${receipt.weightKg} kg`}</p>
-  <img src="${qr}" alt="">
-  <p class="code">${escapeHtml(receipt.code)}</p>
+  <div class="qr">
+    <img src="${qr}" alt="">
+    <p class="code">${escapeHtml(receipt.code)}</p>
+  </div>
 </body></html>`;
 
   const frame = document.createElement('iframe');

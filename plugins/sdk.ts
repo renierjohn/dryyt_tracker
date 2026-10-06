@@ -11,6 +11,8 @@ export { useSession } from '../src/lib/session';
 export { default as AppShell, Icon, type IconName } from '../src/components/AppShell';
 export { hasPermission } from '../src/lib/permissions';
 export { RichTextEditor, StoreInfo } from '../src/components/LazyHeavy';
+export { default as SocialLinks } from '../src/components/SocialLinks';
+export type { SocialLink } from '../src/lib/socialLinks';
 export type { RichTextEditorInstance } from '../src/components/RichTextEditor';
 export { default as RichText } from '../src/components/RichText';
 export { CONTACT_ERROR, isInvalidContact } from '../src/lib/contact';

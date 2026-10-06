@@ -65,6 +65,15 @@ describe('public store details', () => {
     expect(body.store).toEqual(STORE);
     expect(body.contact).toEqual({ email: 'store-public@example.com', contact_number: null });
     expect((body as unknown as { alerts: unknown[] }).alerts).toEqual([]);
+    expect((body as unknown as { social_links: unknown[] }).social_links).toEqual([]);
+  });
+
+  it("includes the owner's social media links", async () => {
+    const cookie = await createUserWithRoleAndLogin('store-social@example.com', await getOwnerRoleId(), 'Store Social');
+    const links = [{ platform: 'facebook', url: 'https://facebook.com/storesocial' }];
+    await req('PUT', '/api/profile', { social_links: links }, cookie);
+    const body = (await (await req('GET', '/api/owners/Store%20Social/store')).json()) as { social_links: unknown };
+    expect(body.social_links).toEqual(links);
   });
 
   it("includes the owner's public/both alerts but not dashboard-only ones", async () => {

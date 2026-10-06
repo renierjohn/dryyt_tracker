@@ -66,6 +66,39 @@ describe('POST /api/plugins/workflow/transactions', () => {
     expect((await create({ weight_kg: -1 })).status).toBe(400);
   });
 
+  it('registers under a code fetched beforehand for a printed slip', async () => {
+    const owner = await createUserWithRoleAndLogin('workflow-printed-code@example.com', await getAdminRoleId(), 'Admin');
+    const { code } = (await (await req('GET', '/api/plugins/workflow/transactions/new-code', undefined, owner)).json()) as {
+      code: string;
+    };
+    expect(code).toMatch(/^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{6}$/);
+    const res = await req('POST', '/api/plugins/workflow/transactions', { customer_name: 'Slip', code: code.toLowerCase() }, owner);
+    expect(res.status).toBe(201);
+    expect(((await res.json()) as { transaction: { code: string } }).transaction.code).toBe(code);
+
+    expect((await req('POST', '/api/plugins/workflow/transactions', { customer_name: 'Again', code }, owner)).status).toBe(409);
+    expect((await req('POST', '/api/plugins/workflow/transactions', { customer_name: 'Bad', code: 'O0O0O0' }, owner)).status).toBe(400);
+  });
+
+  it("exports all of the owner's transactions with the linked customer's email", async () => {
+    const owner = await createUserWithRoleAndLogin('workflow-export@example.com', await getAdminRoleId(), 'Admin');
+    const other = await createUserWithRoleAndLogin('workflow-export-other@example.com', await getAdminRoleId(), 'Admin2');
+    await req('POST', '/api/plugins/workflow/transactions', { customer_name: 'First', customer_contact: '09175550001' }, owner);
+    await req('POST', '/api/plugins/workflow/transactions', { customer_name: 'Walk-in' }, owner);
+    await req('POST', '/api/plugins/workflow/transactions', { customer_name: 'Not mine' }, other);
+
+    const res = await req('GET', '/api/plugins/workflow/transactions/export', undefined, owner);
+    expect(res.status).toBe(200);
+    const { transactions } = (await res.json()) as { transactions: Array<Record<string, unknown>> };
+    expect(transactions).toEqual([
+      expect.objectContaining({
+        control_number: '000001', customer_name: 'First', customer_contact: '09175550001', customer_email: 'first@dryyt.com', status: 'hold', done_at: null,
+      }),
+      expect.objectContaining({ control_number: '000002', customer_name: 'Walk-in', customer_contact: null, customer_email: null }),
+    ]);
+    expect((await req('GET', '/api/plugins/workflow/transactions/export')).status).toBe(401);
+  });
+
   it('rejects an empty customer name with 400', async () => {
     const adminRoleId = await getAdminRoleId();
     const adminCookie = await createUserWithRoleAndLogin('workflow-empty-name@example.com', adminRoleId, 'Admin');

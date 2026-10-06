@@ -1,13 +1,13 @@
 Feature:
 
-- Printer
+- Printer OK
 -- Order number (sequence )
 -- Name / Order number / QR code
 -- 58mm width
 
-- Add report (csv file)
+- Add report (csv file) OK
 
-- Add social media link
+- Add social media link ok
 
 Bug:
 Address not accurate
@@ -15,3 +15,8 @@ Address not accurate
 
 Revised
 - remove camera - OK
+
+
+Phase 1.1
+- Add tungstin login/register
+-

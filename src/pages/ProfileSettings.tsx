@@ -1,9 +1,20 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { AuthUser } from '../lib/useCurrentUser';
 import { apiFetch, ApiError } from '../lib/api';
 import { canSendAlerts, isCustomer } from '../lib/permissions';
 import AlertEditor, { type AlertFormValues } from '../components/AlertEditor';
 import '../assets/sass/dashboard.scss';
+import {
+  MAX_SOCIAL_LINKS,
+  SOCIAL_LABELS,
+  SOCIAL_PLATFORMS,
+  type SocialLink,
+  type SocialPlatform,
+} from '../lib/socialLinks';
+
+// A new row starts on the first platform not already listed.
+const nextPlatform = (links: SocialLink[]) =>
+  SOCIAL_PLATFORMS.find((p) => !links.some((l) => l.platform === p)) ?? 'website';
 
 interface Alert {
   id: number;
@@ -59,18 +70,42 @@ function ProfileForm({ user, refresh }: { user: AuthUser; refresh: () => Promise
   const [displayName, setDisplayName] = useState(user.display_name);
   const [email, setEmail] = useState(user.email);
   const [contactNumber, setContactNumber] = useState(user.contact_number ?? '');
+  // Each row gets a local id so React keeps inputs stable when one is removed.
+  const [socialLinks, setSocialLinks] = useState<(SocialLink & { id: number })[]>([]);
+  const nextLinkId = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+
+  function withIds(links: SocialLink[]) {
+    return links.map((link) => ({ ...link, id: nextLinkId.current++ }));
+  }
+
+  useEffect(() => {
+    apiFetch<{ social_links: SocialLink[] }>('/profile/social-links')
+      .then((body) => setSocialLinks(withIds(body.social_links)))
+      .catch((err) => setError(err instanceof ApiError ? err.code : 'unknown_error'));
+  }, []);
+
+  function updateLink(id: number, change: Partial<SocialLink>) {
+    setSocialLinks((links) => links.map((link) => (link.id === id ? { ...link, ...change } : link)));
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setSaved(false);
     try {
-      await apiFetch('/profile', {
+      const body = await apiFetch<{ social_links: SocialLink[] }>('/profile', {
         method: 'PUT',
-        body: JSON.stringify({ display_name: displayName, email, contact_number: contactNumber }),
+        body: JSON.stringify({
+          display_name: displayName,
+          email,
+          contact_number: contactNumber,
+          social_links: socialLinks.map(({ platform, url }) => ({ platform, url })),
+        }),
       });
+      // Normalized server-side (https:// added, blank rows dropped).
+      setSocialLinks(withIds(body.social_links));
       await refresh();
       setSaved(true);
     } catch (err) {
@@ -102,6 +137,46 @@ function ProfileForm({ user, refresh }: { user: AuthUser; refresh: () => Promise
             autoComplete="tel"
           />
         </label>
+        <fieldset className="dashboard__social">
+          <legend>Social media links</legend>
+          {socialLinks.map((link) => (
+            <div key={link.id} className="dashboard__social-row">
+              <select
+                aria-label="Social media"
+                value={link.platform}
+                onChange={(e) => updateLink(link.id, { platform: e.target.value as SocialPlatform })}
+              >
+                {SOCIAL_PLATFORMS.map((p) => (
+                  <option key={p} value={p}>{SOCIAL_LABELS[p]}</option>
+                ))}
+              </select>
+              <input
+                type="url"
+                aria-label={`${SOCIAL_LABELS[link.platform]} link`}
+                value={link.url}
+                onChange={(e) => updateLink(link.id, { url: e.target.value })}
+                placeholder="https://"
+              />
+              <button
+                type="button"
+                className="dashboard__button"
+                aria-label={`Remove ${SOCIAL_LABELS[link.platform]} link`}
+                onClick={() => setSocialLinks((links) => links.filter((l) => l.id !== link.id))}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+          {socialLinks.length < MAX_SOCIAL_LINKS && (
+            <button
+              type="button"
+              className="dashboard__button"
+              onClick={() => setSocialLinks((links) => [...links, ...withIds([{ platform: nextPlatform(links), url: '' }])])}
+            >
+              + Add social media link
+            </button>
+          )}
+        </fieldset>
         <button className="dashboard__button" type="submit">Save profile</button>
       </form>
     </section>

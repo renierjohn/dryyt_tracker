@@ -12,7 +12,7 @@ import { likePattern, parsePage, PAGE_SIZE } from '../../../worker/pagination';
 import type { AppBindings } from '../../../worker/types';
 import { sanitizeHtml } from '../../../worker/sanitize';
 import { generateToken, hashPassword } from '../../../worker/crypto';
-import { generateCode } from './code';
+import { generateCode, isValidCode } from './code';
 
 // description is rich text (CKEditor HTML), sanitized on write. Rows written
 // before that were plain text, stored unsanitized — so every read sanitizes
@@ -137,10 +137,12 @@ async function insertWithUniqueCode(
     weightKg: number | null;
     // null: assign the owner's next one.
     controlNumber: string | null;
+    // Already printed on a slip (see /transactions/new-code); null: generate one.
+    code: string | null;
   },
-): Promise<WorkflowTransaction | 'duplicate_control_number'> {
+): Promise<WorkflowTransaction | 'duplicate_control_number' | 'duplicate_code'> {
   for (let attempt = 0; attempt < 10; attempt++) {
-    const code = generateCode();
+    const code = params.code ?? generateCode();
     const controlNumber = params.controlNumber ?? (await nextControlNumber(db, params.createdBy));
     try {
       const row = await db
@@ -166,6 +168,7 @@ async function insertWithUniqueCode(
       // A typed control number that's taken is the caller's to fix; an
       // assigned one (or the code) just lost a race — retry.
       if (err.message.includes('control_number') && params.controlNumber !== null) return 'duplicate_control_number';
+      if (err.message.includes('code') && params.code !== null) return 'duplicate_code';
     }
   }
   throw new Error('failed to generate a unique code');
@@ -194,6 +197,8 @@ workflowRoutes.post('/transactions', requirePermission('manage_users'), async (c
     return c.json({ error: 'invalid_weight' }, 400);
   }
   if (rawControl && !/^\d{1,12}$/.test(rawControl)) return c.json({ error: 'invalid_control_number' }, 400);
+  const rawCode = typeof body?.code === 'string' ? body.code.trim().toUpperCase() : '';
+  if (rawCode && !isValidCode(rawCode)) return c.json({ error: 'invalid_code' }, 400);
   if (customerEmail && !isValidEmail(customerEmail)) return c.json({ error: 'invalid_email' }, 400);
   if (customerContact && !isValidContactNumber(customerContact)) return c.json({ error: 'invalid_contact_number' }, 400);
 
@@ -257,9 +262,41 @@ workflowRoutes.post('/transactions', requirePermission('manage_users'), async (c
     customerUserId,
     weightKg: weightKg === null ? null : Math.round(weightKg * 100) / 100,
     controlNumber: rawControl ? formatControlNumber(Number(rawControl)) : null,
+    code: rawCode || null,
   });
-  if (transaction === 'duplicate_control_number') return c.json({ error: 'duplicate_control_number' }, 409);
+  if (transaction === 'duplicate_control_number' || transaction === 'duplicate_code') {
+    return c.json({ error: transaction }, 409);
+  }
   return c.json({ transaction }, 201);
+});
+
+// Every transaction of the signed-in owner, oldest first, for the Tracker's
+// "Download report" (the file itself is built client-side). email is the
+// linked customer account's, when there is one.
+workflowRoutes.get('/transactions/export', requirePermission('manage_users'), async (c) => {
+  const { results } = await c.env.DB
+    .prepare(
+      `SELECT t.control_number, t.code, t.customer_name, t.customer_contact, u.email AS customer_email,
+              t.status, t.created_at, t.done_at
+       FROM workflow_transactions t
+       LEFT JOIN users u ON u.id = t.customer_user_id
+       WHERE t.created_by = ? ORDER BY t.created_at ASC, t.id ASC`,
+    )
+    .bind(c.get('user')!.id)
+    .all();
+  return c.json({ transactions: results });
+});
+
+// An unused code, for a slip printed before the transaction is registered;
+// the form then registers with it. Not reserved — registering with a code
+// that got taken in between fails with duplicate_code.
+workflowRoutes.get('/transactions/new-code', requirePermission('manage_users'), async (c) => {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const code = generateCode();
+    const taken = await c.env.DB.prepare('SELECT 1 FROM workflow_transactions WHERE code = ?').bind(code).first();
+    if (!taken) return c.json({ code });
+  }
+  throw new Error('failed to generate a unique code');
 });
 
 // The control number the next registration gets if none is typed — the

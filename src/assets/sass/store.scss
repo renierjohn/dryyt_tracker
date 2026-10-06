@@ -158,6 +158,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 4px 24px;
+    align-items: center;
     margin-bottom: 20px;
     padding-inline: 4px;
     font-size: 16px;
@@ -170,6 +171,41 @@
       &:hover {
         color: var(--m3-primary);
         text-decoration: underline;
+      }
+    }
+
+    // Icon-only social links (SocialLinks.tsx), right after the contact number.
+    // The 32px hit targets overhang the 24px text line instead of making the
+    // row taller, so the icons centre on the email/number text.
+    .social-links {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: center;
+      margin-block: -4px;
+    }
+
+    .social-links__link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+
+      svg {
+        width: 20px;
+        height: 20px;
+        fill: currentColor;
+      }
+
+      &:hover {
+        background: var(--m3-surface-container);
+      }
+
+      &:focus-visible {
+        outline: 2px solid var(--m3-primary);
+        outline-offset: 2px;
       }
     }
   }
