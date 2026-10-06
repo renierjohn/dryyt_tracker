@@ -151,7 +151,7 @@ export default function Track() {
               </div>
               {transaction.description && (
                 <div>
-                  <dt>Description</dt>
+                  <dt>Notes</dt>
                   <RichText as="dd" html={transaction.description} />
                 </div>
               )}

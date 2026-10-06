@@ -454,7 +454,8 @@ function RegisterTransactionForm({ onCreated }: { onCreated: (code: string) => P
   // Print only prints the claim slip — under a fresh code and the control
   // number it shows (pinned into the field) — and Register then saves the
   // transaction with both. Registering with nothing printed asks first.
-  // Editing what's on the slip afterwards means it needs printing again.
+  // Editing what's on the slip (name, control number, weight, notes)
+  // afterwards means it needs printing again.
   const [printedCode, setPrintedCode] = useState<string | null>(null);
   const [printed, setPrinted] = useState(false);
   const [printing, setPrinting] = useState(false);
@@ -482,6 +483,7 @@ function RegisterTransactionForm({ onCreated }: { onCreated: (code: string) => P
         customerName: customerName.trim(),
         controlNumber: control,
         weightKg: weight.trim() ? Math.round(Number(weight) * 100) / 100 : null,
+        notesHtml: description,
         code,
       });
       setPrinted(true);
@@ -572,7 +574,7 @@ function RegisterTransactionForm({ onCreated }: { onCreated: (code: string) => P
             />
           </label>
           <label>
-            Weight in kg (optional)
+            Weight in kg
             <input
               type="number"
               inputMode="decimal"
@@ -605,7 +607,10 @@ function RegisterTransactionForm({ onCreated }: { onCreated: (code: string) => P
           <RichTextEditor
             label="Notes"
             placeholder="Items, notes…"
-            onChange={setDescription}
+            onChange={(html) => {
+              setPrinted(false);
+              setDescription(html);
+            }}
             onReady={(editor) => {
               editorRef.current = editor;
             }}
