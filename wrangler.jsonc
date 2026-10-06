@@ -15,10 +15,6 @@
 		{
 			"binding": "AVATARS",
 			"bucket_name": "dryyt-tracker-avatars"
-		},
-		{
-			"binding": "TRANSACTION_IMAGES",
-			"bucket_name": "dryyt-tracker-transaction-images"
 		}
 	],
 	"vars": {
@@ -54,10 +50,6 @@
 				{
 					"binding": "AVATARS",
 					"bucket_name": "dryyt-tracker-staging-avatars"
-				},
-				{
-					"binding": "TRANSACTION_IMAGES",
-					"bucket_name": "dryyt-tracker-staging-transaction-images"
 				}
 			],
 			"vars": {
@@ -84,10 +76,6 @@
 				{
 					"binding": "AVATARS",
 					"bucket_name": "dryyt-tracker-avatars"
-				},
-				{
-					"binding": "TRANSACTION_IMAGES",
-					"bucket_name": "dryyt-tracker-transaction-images"
 				}
 			],
 			"vars": {

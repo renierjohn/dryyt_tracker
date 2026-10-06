@@ -11,7 +11,6 @@ import { isValidContactNumber, isValidEmail } from '../../../worker/util';
 import { likePattern, parsePage, PAGE_SIZE } from '../../../worker/pagination';
 import type { AppBindings } from '../../../worker/types';
 import { sanitizeHtml } from '../../../worker/sanitize';
-import { detectImageMimeType } from '../../../worker/image';
 import { generateToken, hashPassword } from '../../../worker/crypto';
 import { generateCode } from './code';
 
@@ -37,45 +36,15 @@ async function cleanDescription(raw: unknown): Promise<string | null> {
 // single-purpose plugin routers (e.g. hello, alerts) do it.
 const workflowRoutes = new Hono<AppBindings>();
 
-// Public lookup by code. Knowing the code is the access check, so this also
-// lists the transaction's photo ids — served by the route below, which only
-// returns a photo when it belongs to the transaction with that code.
+// Public lookup by code. Knowing the code is the access check.
 workflowRoutes.get('/track/:code', async (c) => {
   const code = c.req.param('code').toUpperCase();
   const row = await c.env.DB
-    .prepare('SELECT id, code, customer_name, description, status, updated_at FROM workflow_transactions WHERE code = ?')
+    .prepare('SELECT code, customer_name, description, status, updated_at FROM workflow_transactions WHERE code = ?')
     .bind(code)
-    .first<{ id: number; description: string | null }>();
+    .first<{ description: string | null }>();
   if (!row) return c.json({ error: 'not_found' }, 404);
-  const { results: images } = await c.env.DB
-    .prepare('SELECT id FROM workflow_transaction_images WHERE transaction_id = ? ORDER BY id')
-    .bind(row.id)
-    .all<{ id: number }>();
-  // The internal id stays server-side; photos are addressed by code.
-  const transaction: Record<string, unknown> = { ...(await withSafeDescription(row)) };
-  delete transaction.id;
-  return c.json({ transaction: { ...transaction, image_ids: images.map((i) => i.id) } });
-});
-
-workflowRoutes.get('/track/:code/images/:imageId', async (c) => {
-  const row = await c.env.DB
-    .prepare(
-      `SELECT i.r2_key, i.content_type FROM workflow_transaction_images i
-       JOIN workflow_transactions t ON t.id = i.transaction_id
-       WHERE i.id = ? AND t.code = ?`,
-    )
-    .bind(Number(c.req.param('imageId')), c.req.param('code').toUpperCase())
-    .first<{ r2_key: string; content_type: string }>();
-  if (!row) return c.json({ error: 'not_found' }, 404);
-  const object = await c.env.TRANSACTION_IMAGES.get(row.r2_key);
-  if (!object) return c.json({ error: 'not_found' }, 404);
-  return new Response(object.body, {
-    headers: {
-      'Content-Type': row.content_type,
-      'Cache-Control': 'private, max-age=86400',
-      'X-Content-Type-Options': 'nosniff',
-    },
-  });
+  return c.json({ transaction: await withSafeDescription(row) });
 });
 
 // Public: the read-only view reached from an owner's card on the homepage
@@ -92,7 +61,8 @@ workflowRoutes.get('/track/:code/images/:imageId', async (c) => {
 // Signed-in visitors get every transaction, newest first — in full, except
 // for 'user'-role customers and other owners: they only see code/customer/
 // description on their own transactions (customer_user_id) — the rest come
-// back NULL — and never done_at.
+// back NULL — and never done_at. control_number is shown to everyone: it's a
+// sequential ticket number, not the code that unlocks /track/:code.
 workflowRoutes.get('/owners/:identifier/transactions', async (c) => {
   const owner = await getActiveOwnerByIdentifier(c.env.DB, c.req.param('identifier'));
   if (!owner) return c.json({ error: 'not_found' }, 404);
@@ -100,13 +70,13 @@ workflowRoutes.get('/owners/:identifier/transactions', async (c) => {
   const user = c.get('user');
   const stmt = !user
     ? c.env.DB.prepare(
-        `SELECT id, NULL AS code, NULL AS customer_name, NULL AS description, status, created_at
+        `SELECT id, control_number, NULL AS code, NULL AS customer_name, NULL AS description, status, created_at
          FROM workflow_transactions WHERE created_by = ? AND status IN ('in_progress', 'hold')
          ORDER BY CASE status WHEN 'in_progress' THEN 0 ELSE 1 END, created_at ASC, id ASC`,
       ).bind(owner.id)
     : (user.role_name === 'user' || user.role_name === 'owner') && user.id !== owner.id
       ? c.env.DB.prepare(
-          `SELECT id,
+          `SELECT id, control_number,
              CASE WHEN customer_user_id = ?2 THEN code END AS code,
              CASE WHEN customer_user_id = ?2 THEN customer_name END AS customer_name,
              CASE WHEN customer_user_id = ?2 THEN description END AS description,
@@ -114,7 +84,7 @@ workflowRoutes.get('/owners/:identifier/transactions', async (c) => {
            FROM workflow_transactions WHERE created_by = ?1 ORDER BY created_at DESC, id DESC`,
         ).bind(owner.id, user.id)
       : c.env.DB.prepare(
-          `SELECT id, code, customer_name, description, status, created_at, updated_at, done_at
+          `SELECT id, control_number, code, customer_name, description, status, created_at, updated_at, done_at
            FROM workflow_transactions WHERE created_by = ? ORDER BY created_at DESC, id DESC`,
         ).bind(owner.id);
   const { results } = await stmt.all<{ description: string | null }>();
@@ -139,6 +109,21 @@ export interface WorkflowTransaction {
   updated_at: string;
   done_at: string | null;
   customer_user_id: number | null;
+  weight_kg: number | null;
+  control_number: string | null;
+}
+
+// Control numbers are digits, zero-padded to at least 6 ("000001").
+const CONTROL_NUMBER_WIDTH = 6;
+const formatControlNumber = (n: number) => String(n).padStart(CONTROL_NUMBER_WIDTH, '0');
+
+// The owner's next control number: one past their highest so far.
+async function nextControlNumber(db: D1Database, ownerId: number): Promise<string> {
+  const row = await db
+    .prepare('SELECT MAX(CAST(control_number AS INTEGER)) AS n FROM workflow_transactions WHERE created_by = ?')
+    .bind(ownerId)
+    .first<{ n: number | null }>();
+  return formatControlNumber((row?.n ?? 0) + 1);
 }
 
 async function insertWithUniqueCode(
@@ -149,26 +134,48 @@ async function insertWithUniqueCode(
     description: string | null;
     createdBy: number;
     customerUserId: number | null;
+    weightKg: number | null;
+    // null: assign the owner's next one.
+    controlNumber: string | null;
   },
-): Promise<WorkflowTransaction> {
+): Promise<WorkflowTransaction | 'duplicate_control_number'> {
   for (let attempt = 0; attempt < 10; attempt++) {
     const code = generateCode();
+    const controlNumber = params.controlNumber ?? (await nextControlNumber(db, params.createdBy));
     try {
       const row = await db
         .prepare(
-          `INSERT INTO workflow_transactions (code, customer_name, customer_contact, description, created_by, customer_user_id)
-           VALUES (?, ?, ?, ?, ?, ?) RETURNING *`,
+          `INSERT INTO workflow_transactions
+             (code, customer_name, customer_contact, description, created_by, customer_user_id, weight_kg, control_number)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
         )
-        .bind(code, params.customerName, params.customerContact, params.description, params.createdBy, params.customerUserId)
+        .bind(
+          code,
+          params.customerName,
+          params.customerContact,
+          params.description,
+          params.createdBy,
+          params.customerUserId,
+          params.weightKg,
+          controlNumber,
+        )
         .first<WorkflowTransaction>();
       if (row) return row;
     } catch (err) {
-      if (err instanceof Error && err.message.includes('UNIQUE')) continue;
-      throw err;
+      if (!(err instanceof Error && err.message.includes('UNIQUE'))) throw err;
+      // A typed control number that's taken is the caller's to fix; an
+      // assigned one (or the code) just lost a race — retry.
+      if (err.message.includes('control_number') && params.controlNumber !== null) return 'duplicate_control_number';
     }
   }
   throw new Error('failed to generate a unique code');
 }
+
+// Customers registered without an email get <name>@GENERATED_EMAIL_DOMAIN.
+const GENERATED_EMAIL_DOMAIN = 'dryyt.com';
+
+// Contact numbers compare by digits only ("0912 345 6789" = "09123456789").
+const normalizeContact = (value: string) => value.replace(/\D/g, '');
 
 workflowRoutes.post('/transactions', requirePermission('manage_users'), async (c) => {
   const admin = c.get('user')!;
@@ -178,33 +185,64 @@ workflowRoutes.post('/transactions', requirePermission('manage_users'), async (c
     typeof body?.customer_contact === 'string' && body.customer_contact.trim() ? body.customer_contact.trim() : null;
   const customerEmail = typeof body?.customer_email === 'string' ? body.customer_email.trim().toLowerCase() : '';
   const description = await cleanDescription(body?.description);
+  const rawWeight = body?.weight_kg;
+  const weightKg = rawWeight === undefined || rawWeight === null || rawWeight === '' ? null : Number(rawWeight);
+  const rawControl = typeof body?.control_number === 'string' ? body.control_number.trim() : '';
 
   if (!customerName) return c.json({ error: 'missing_customer_name' }, 400);
+  if (weightKg !== null && !(Number.isFinite(weightKg) && weightKg > 0 && weightKg <= 10000)) {
+    return c.json({ error: 'invalid_weight' }, 400);
+  }
+  if (rawControl && !/^\d{1,12}$/.test(rawControl)) return c.json({ error: 'invalid_control_number' }, 400);
   if (customerEmail && !isValidEmail(customerEmail)) return c.json({ error: 'invalid_email' }, 400);
   if (customerContact && !isValidContactNumber(customerContact)) return c.json({ error: 'invalid_contact_number' }, 400);
 
-  // With an email, the customer also becomes one of this owner's users (role
-  // 'user', parent_id = owner) — unless that email is already registered.
-  // They get a random password and can set their own via forgot-password.
-  // The transaction is linked to that user only when it's one of this owner's.
+  // The contact number is the customer's key among this owner's users (role
+  // 'user', parent_id = owner): a matching user is linked. Failing that, an
+  // email that's already registered is linked when it's one of this owner's
+  // users. Otherwise, with a name and contact number, the customer becomes a
+  // new user — under the given email, or <name>@dryyt.com when there's none —
+  // with a random password they can replace via forgot-password.
   let customerUserId: number | null = null;
-  const existing = customerEmail ? await getUserByEmail(c.env.DB, customerEmail) : null;
-  if (existing) {
-    if (existing.parent_id === admin.id) customerUserId = existing.id;
-  } else if (customerEmail) {
+  const contactKey = customerContact ? normalizeContact(customerContact) : '';
+  const byContact = contactKey
+    ? (await listUsersByParent(c.env.DB, admin.id)).find(
+        (u) => u.contact_number && normalizeContact(u.contact_number) === contactKey,
+      )
+    : undefined;
+  const byEmail = !byContact && customerEmail ? await getUserByEmail(c.env.DB, customerEmail) : null;
+  if (byContact) {
+    customerUserId = byContact.id;
+  } else if (byEmail) {
+    if (byEmail.parent_id === admin.id) customerUserId = byEmail.id;
+  } else if (customerContact) {
     const userRole = await getRoleByName(c.env.DB, 'user');
     if (!userRole) return c.json({ error: 'role_not_configured' }, 500);
     const { hash, salt } = await hashPassword(generateToken());
-    try {
-      const created = await createUser(c.env.DB, {
-        email: customerEmail,
+    const create = (email: string) =>
+      createUser(c.env.DB, {
+        email,
         passwordHash: hash,
         passwordSalt: salt,
         roleId: userRole.id,
         displayName: customerName,
         parentId: admin.id,
+        contactNumber: customerContact,
       });
-      customerUserId = created.id;
+    try {
+      if (customerEmail) {
+        customerUserId = (await create(customerEmail)).id;
+      } else {
+        // Same name already taken: juandelacruz2@, juandelacruz3@, ...
+        const local = customerName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'customer';
+        for (let n = 1; customerUserId === null && n <= 50; n++) {
+          try {
+            customerUserId = (await create(`${local}${n > 1 ? n : ''}@${GENERATED_EMAIL_DOMAIN}`)).id;
+          } catch (err) {
+            if (!(err instanceof Error && err.message.includes('UNIQUE'))) throw err;
+          }
+        }
+      }
     } catch (err) {
       // Registered concurrently — same outcome as "already exists".
       if (!(err instanceof Error && err.message.includes('UNIQUE'))) throw err;
@@ -217,8 +255,17 @@ workflowRoutes.post('/transactions', requirePermission('manage_users'), async (c
     description,
     createdBy: admin.id,
     customerUserId,
+    weightKg: weightKg === null ? null : Math.round(weightKg * 100) / 100,
+    controlNumber: rawControl ? formatControlNumber(Number(rawControl)) : null,
   });
+  if (transaction === 'duplicate_control_number') return c.json({ error: 'duplicate_control_number' }, 409);
   return c.json({ transaction }, 201);
+});
+
+// The control number the next registration gets if none is typed — the
+// register form's placeholder.
+workflowRoutes.get('/transactions/next-control-number', requirePermission('manage_users'), async (c) => {
+  return c.json({ control_number: await nextControlNumber(c.env.DB, c.get('user')!.id) });
 });
 
 // The signed-in owner's own users, for the customer-name autocomplete and the
@@ -240,6 +287,7 @@ workflowRoutes.get('/customers', requirePermission('manage_users'), async (c) =>
       id: u.id,
       display_name: u.display_name,
       email: u.email,
+      contact_number: u.contact_number,
       codes: codes.get(u.id) ?? [],
     })),
   });
@@ -279,23 +327,7 @@ workflowRoutes.get('/transactions', requirePermission('manage_users'), async (c)
     paging = { page, page_size: PAGE_SIZE, total: (count.results[0] as { n: number }).n };
   }
 
-  // Photos for just the returned rows; ids go in as one JSON array parameter.
-  const { results: images } = await c.env.DB
-    .prepare(
-      `SELECT id, transaction_id FROM workflow_transaction_images
-       WHERE transaction_id IN (SELECT value FROM json_each(?)) ORDER BY id`,
-    )
-    .bind(JSON.stringify(results.map((t) => t.id)))
-    .all<{ id: number; transaction_id: number }>();
-  const imageIds = new Map<number, number[]>();
-  for (const img of images) {
-    imageIds.set(img.transaction_id, [...(imageIds.get(img.transaction_id) ?? []), img.id]);
-  }
-  const transactions = await Promise.all(results.map(withSafeDescription));
-  return c.json({
-    ...paging,
-    transactions: transactions.map((t) => ({ ...t, image_ids: imageIds.get(t.id) ?? [] })),
-  });
+  return c.json({ ...paging, transactions: await Promise.all(results.map(withSafeDescription)) });
 });
 
 // Superadmin console: every transaction across all owners, newest first, with
@@ -343,42 +375,25 @@ workflowRoutes.get('/admin/transactions', requireRole('superadmin'), async (c) =
 });
 
 // Superadmin console: permanently delete every transaction created more than
-// 3 months ago, with its photos (R2 objects + rows). { dry_run: true } only
-// counts. Photos go first, so a failed R2 delete leaves the data intact
-// rather than orphaning stored files.
+// 3 months ago. { dry_run: true } only counts.
 workflowRoutes.post('/admin/transactions/purge-old', requireRole('superadmin'), async (c) => {
   const body = await c.req.json().catch(() => null);
   const dryRun = body?.dry_run === true;
   // One cutoff for every statement below, so they all agree on the set.
   const cutoff = (await c.env.DB.prepare("SELECT datetime('now', '-3 months') AS t").first<{ t: string }>())!.t;
-  const old = 'SELECT id FROM workflow_transactions WHERE created_at < ?';
 
   const counts = await c.env.DB
-    .prepare(
-      `SELECT (SELECT COUNT(*) FROM workflow_transactions WHERE created_at < ?1) AS transactions,
-              (SELECT COUNT(*) FROM workflow_transaction_images WHERE transaction_id IN (${old.replace('?', '?1')})) AS images`,
-    )
+    .prepare('SELECT COUNT(*) AS transactions FROM workflow_transactions WHERE created_at < ?')
     .bind(cutoff)
-    .first<{ transactions: number; images: number }>();
-  const result = { cutoff, transactions: counts?.transactions ?? 0, images: counts?.images ?? 0 };
+    .first<{ transactions: number }>();
+  const result = { cutoff, transactions: counts?.transactions ?? 0 };
   if (dryRun || result.transactions === 0) return c.json({ ...result, dry_run: dryRun });
 
-  const { results: images } = await c.env.DB
-    .prepare(`SELECT r2_key FROM workflow_transaction_images WHERE transaction_id IN (${old})`)
-    .bind(cutoff)
-    .all<{ r2_key: string }>();
-  const keys = images.map((i) => i.r2_key);
-  for (let i = 0; i < keys.length; i += 1000) {
-    await c.env.TRANSACTION_IMAGES.delete(keys.slice(i, i + 1000));
-  }
-  await c.env.DB.batch([
-    c.env.DB.prepare(`DELETE FROM workflow_transaction_images WHERE transaction_id IN (${old})`).bind(cutoff),
-    c.env.DB.prepare('DELETE FROM workflow_transactions WHERE created_at < ?').bind(cutoff),
-  ]);
+  await c.env.DB.prepare('DELETE FROM workflow_transactions WHERE created_at < ?').bind(cutoff).run();
   return c.json({ ...result, dry_run: false });
 });
 
-// Superadmin console: one transaction in full, with its photos.
+// Superadmin console: one transaction in full.
 workflowRoutes.get('/admin/transactions/:id', requireRole('superadmin'), async (c) => {
   const row = await c.env.DB
     .prepare(
@@ -392,11 +407,7 @@ workflowRoutes.get('/admin/transactions/:id', requireRole('superadmin'), async (
     .bind(Number(c.req.param('id')))
     .first<{ id: number; description: string | null }>();
   if (!row) return c.json({ error: 'not_found' }, 404);
-  const { results: images } = await c.env.DB
-    .prepare('SELECT id FROM workflow_transaction_images WHERE transaction_id = ? ORDER BY id')
-    .bind(row.id)
-    .all<{ id: number }>();
-  return c.json({ transaction: { ...(await withSafeDescription(row)), image_ids: images.map((i) => i.id) } });
+  return c.json({ transaction: await withSafeDescription(row) });
 });
 
 // A customer's own view: transactions registered for them (customer_user_id),
@@ -410,91 +421,7 @@ workflowRoutes.get('/my-transactions', requireAuth, async (c) => {
     )
     .bind(user.id)
     .all<{ id: number; description: string | null }>();
-  const { results: images } = await c.env.DB
-    .prepare(
-      `SELECT i.id, i.transaction_id FROM workflow_transaction_images i
-       JOIN workflow_transactions t ON t.id = i.transaction_id
-       WHERE t.customer_user_id = ? ORDER BY i.id`,
-    )
-    .bind(user.id)
-    .all<{ id: number; transaction_id: number }>();
-  const imageIds = new Map<number, number[]>();
-  for (const img of images) {
-    imageIds.set(img.transaction_id, [...(imageIds.get(img.transaction_id) ?? []), img.id]);
-  }
-  const transactions = await Promise.all(results.map(withSafeDescription));
-  return c.json({ transactions: transactions.map((t) => ({ ...t, image_ids: imageIds.get(t.id) ?? [] })) });
-});
-
-// Photos attached to a transaction. Private: only the owner who registered it
-// can add or view them. The client resizes before upload; this cap is the
-// backstop.
-export const MAX_TRANSACTION_IMAGE_BYTES = 1024 * 1024;
-const MAX_IMAGES_PER_TRANSACTION = 10;
-const IMAGE_EXTENSIONS: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
-
-async function getOwnTransaction(db: D1Database, id: number, userId: number) {
-  return db
-    .prepare('SELECT id FROM workflow_transactions WHERE id = ? AND created_by = ?')
-    .bind(id, userId)
-    .first<{ id: number }>();
-}
-
-workflowRoutes.post('/transactions/:id/images', requirePermission('manage_users'), async (c) => {
-  const user = c.get('user')!;
-  const transaction = await getOwnTransaction(c.env.DB, Number(c.req.param('id')), user.id);
-  if (!transaction) return c.json({ error: 'not_found' }, 404);
-
-  const body = await c.req.parseBody();
-  const file = body['file'];
-  if (!(file instanceof File)) return c.json({ error: 'missing_file' }, 400);
-  if (file.size > MAX_TRANSACTION_IMAGE_BYTES) return c.json({ error: 'file_too_large' }, 400);
-
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const mimeType = detectImageMimeType(bytes);
-  if (!mimeType) return c.json({ error: 'unsupported_file_type' }, 400);
-
-  const count = await c.env.DB
-    .prepare('SELECT COUNT(*) AS n FROM workflow_transaction_images WHERE transaction_id = ?')
-    .bind(transaction.id)
-    .first<{ n: number }>();
-  if ((count?.n ?? 0) >= MAX_IMAGES_PER_TRANSACTION) return c.json({ error: 'too_many_images' }, 400);
-
-  const key = `${transaction.id}-${generateToken()}.${IMAGE_EXTENSIONS[mimeType]}`;
-  await c.env.TRANSACTION_IMAGES.put(key, bytes, { httpMetadata: { contentType: mimeType } });
-  const image = await c.env.DB
-    .prepare(
-      `INSERT INTO workflow_transaction_images (transaction_id, r2_key, content_type, size)
-       VALUES (?, ?, ?, ?) RETURNING id, transaction_id, content_type, size, created_at`,
-    )
-    .bind(transaction.id, key, mimeType, bytes.length)
-    .first();
-  return c.json({ image }, 201);
-});
-
-// Viewable by the owner who registered the transaction, the customer it was
-// registered for, or the superadmin (admin console's transaction details).
-workflowRoutes.get('/transactions/:id/images/:imageId', requireAuth, async (c) => {
-  const user = c.get('user')!;
-  const row = await c.env.DB
-    .prepare(
-      `SELECT i.r2_key, i.content_type FROM workflow_transaction_images i
-       JOIN workflow_transactions t ON t.id = i.transaction_id
-       WHERE i.id = ?1 AND i.transaction_id = ?2 AND (t.created_by = ?3 OR t.customer_user_id = ?3 OR ?4)`,
-    )
-    .bind(Number(c.req.param('imageId')), Number(c.req.param('id')), user.id, user.role_name === 'superadmin' ? 1 : 0)
-    .first<{ r2_key: string; content_type: string }>();
-  if (!row) return c.json({ error: 'not_found' }, 404);
-  const object = await c.env.TRANSACTION_IMAGES.get(row.r2_key);
-  if (!object) return c.json({ error: 'not_found' }, 404);
-  return new Response(object.body, {
-    headers: {
-      'Content-Type': row.content_type,
-      // Private to the signed-in owner/customer — never a shared cache.
-      'Cache-Control': 'private, max-age=86400',
-      'X-Content-Type-Options': 'nosniff',
-    },
-  });
+  return c.json({ transactions: await Promise.all(results.map(withSafeDescription)) });
 });
 
 workflowRoutes.put('/transactions/:id/status', requirePermission('manage_users'), async (c) => {

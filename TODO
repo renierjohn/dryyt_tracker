@@ -1,0 +1,17 @@
+Feature:
+
+- Printer
+-- Order number (sequence )
+-- Name / Order number / QR code
+-- 58mm width
+
+- Add report (csv file)
+
+- Add social media link
+
+Bug:
+Address not accurate
+
+
+Revised
+- remove camera - OK

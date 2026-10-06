@@ -12,6 +12,8 @@ import '../workflow.scss';
 // see the backend route; those cells render a blurred placeholder.
 interface Transaction {
   id: number;
+  // Shown to everyone (see the backend route); older transactions have none.
+  control_number: string | null;
   code: string | null;
   customer_name: string | null;
   description: string | null;
@@ -199,7 +201,7 @@ export default function PublicWorkflowPage() {
               <table className="m3-table">
                 <thead>
                   <tr>
-                    <th>Code</th>
+                    <th>Control Number</th>
                     <th>Customer</th>
                     <th>Description</th>
                     <th>Status</th>
@@ -210,9 +212,9 @@ export default function PublicWorkflowPage() {
                 <tbody>
                   {transactions.map((t) => (
                     <tr key={t.id}>
+                      <td>{t.control_number ?? '—'}</td>
                       {t.code !== null ? (
                         <>
-                          <td><code>{t.code}</code></td>
                           <td>{t.customer_name}</td>
                           <td>
                             <button type="button" className="txn-desc" onClick={() => setOpenTransaction(t)}>
@@ -226,7 +228,6 @@ export default function PublicWorkflowPage() {
                         </>
                       ) : (
                         <>
-                          <td><Hidden width="XXXXXX" /></td>
                           <td><Hidden width="Customer name" /></td>
                           <td><Hidden width="Order description" /></td>
                         </>

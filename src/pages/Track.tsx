@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { apiFetch, ApiError } from '../lib/api';
 import { useSession } from '../lib/session';
@@ -6,7 +6,6 @@ import AppShell, { Icon } from '../components/AppShell';
 import '../assets/sass/home.scss';
 import RichText from '../components/RichText';
 import QrCode from '../components/QrCode';
-import { useColorbox } from '../lib/useColorbox';
 import { setMyTrackCode } from '../lib/myTrack';
 import '../assets/sass/track.scss';
 
@@ -16,7 +15,6 @@ interface TrackedTransaction {
   description: string | null;
   status: string;
   updated_at: string;
-  image_ids: number[];
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -38,7 +36,6 @@ const normalizeCode = (s: string) => s.trim().toUpperCase();
 
 export default function Track() {
   const { user, refresh } = useSession();
-  const photosRef = useRef<HTMLUListElement>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const [code, setCode] = useState(searchParams.get('code') ?? '');
   const [transaction, setTransaction] = useState<TrackedTransaction | null>(null);
@@ -81,7 +78,6 @@ export default function Track() {
   }
 
   const stepIndex = transaction ? STEPS.indexOf(transaction.status) : -1;
-  useColorbox(photosRef, transaction?.image_ids.join(','));
 
   return (
     <AppShell active="track" user={user} refresh={refresh} contentClassName="m3-page track">
@@ -164,24 +160,6 @@ export default function Track() {
                 <dd>{formatUpdated(transaction.updated_at)}</dd>
               </div>
             </dl>
-
-            {transaction.image_ids.length > 0 && (
-              <div className="track__photos">
-                <h2 className="m3-section-title">Photos</h2>
-                <ul ref={photosRef}>
-                  {transaction.image_ids.map((imageId, i) => {
-                    const src = `/api/plugins/workflow/track/${encodeURIComponent(transaction.code)}/images/${imageId}`;
-                    return (
-                      <li key={imageId}>
-                        <a href={src} data-colorbox="track-photos" title={`Photo ${i + 1}`}>
-                          <img src={src} alt={`Photo ${i + 1}`} loading="lazy" />
-                        </a>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            )}
           </article>
         )}
       </section>

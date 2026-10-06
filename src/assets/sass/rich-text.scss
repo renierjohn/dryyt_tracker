@@ -7,6 +7,12 @@
     --ck-border-radius: 4px;
     --ck-font-face: var(--sans);
 
+    // CKEditor's screen-reader-only <label>; `.m3-form label` would otherwise
+    // display it.
+    .ck.ck-voice-label {
+      display: none;
+    }
+
     .ck.ck-editor__main > .ck-editor__editable {
       min-height: 160px;
       font-size: 16px;

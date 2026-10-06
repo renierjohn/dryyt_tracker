@@ -39,6 +39,33 @@ describe('POST /api/plugins/workflow/transactions', () => {
     expect(body.transaction.customer_name).toBe('Jane Doe');
   });
 
+  it('assigns sequential control numbers per owner unless one is typed, and stores the weight', async () => {
+    const owner = await createUserWithRoleAndLogin('workflow-control@example.com', await getAdminRoleId(), 'Admin');
+    const other = await createUserWithRoleAndLogin('workflow-control-other@example.com', await getAdminRoleId(), 'Admin2');
+    const create = async (body: Record<string, unknown>, cookie = owner) =>
+      req('POST', '/api/plugins/workflow/transactions', { customer_name: 'Walk-in', ...body }, cookie);
+    const next = async (cookie = owner) =>
+      ((await (await req('GET', '/api/plugins/workflow/transactions/next-control-number', undefined, cookie)).json()) as {
+        control_number: string;
+      }).control_number;
+    type Txn = { transaction: { control_number: string; weight_kg: number | null } };
+
+    expect(await next()).toBe('000001');
+    const first = (await (await create({ weight_kg: '2.456' })).json()) as Txn;
+    expect(first.transaction).toMatchObject({ control_number: '000001', weight_kg: 2.46 });
+    expect(await next()).toBe('000002');
+
+    const typed = (await (await create({ control_number: '41' })).json()) as Txn;
+    expect(typed.transaction).toMatchObject({ control_number: '000041', weight_kg: null });
+    expect(await next()).toBe('000042');
+    // Another owner has their own sequence.
+    expect(await next(other)).toBe('000001');
+
+    expect((await create({ control_number: '000041' })).status).toBe(409);
+    expect((await create({ control_number: 'A1' })).status).toBe(400);
+    expect((await create({ weight_kg: -1 })).status).toBe(400);
+  });
+
   it('rejects an empty customer name with 400', async () => {
     const adminRoleId = await getAdminRoleId();
     const adminCookie = await createUserWithRoleAndLogin('workflow-empty-name@example.com', adminRoleId, 'Admin');
@@ -50,25 +77,59 @@ describe('POST /api/plugins/workflow/transactions', () => {
 });
 
 describe('customer email registration', () => {
-  it("registers name+email as the owner's user once, and lists it under /customers", async () => {
+  it("registers name+contact as the owner's user once, keyed by contact, and lists it under /customers", async () => {
     const adminRoleId = await getAdminRoleId();
     const adminCookie = await createUserWithRoleAndLogin('workflow-cust-owner@example.com', adminRoleId, 'Admin');
     const first = await req('POST', '/api/plugins/workflow/transactions', {
-      customer_name: 'Cust One', customer_email: 'Cust1@Example.com',
+      customer_name: 'Cust One', customer_contact: '0912 345 6789', customer_email: 'Cust1@Example.com',
     }, adminCookie);
     expect(first.status).toBe(201);
+    // Same number, formatted differently and without an email: linked, not re-created.
     const again = await req('POST', '/api/plugins/workflow/transactions', {
-      customer_name: 'Other Name', customer_email: 'cust1@example.com',
+      customer_name: 'Other Name', customer_contact: '09123456789',
     }, adminCookie);
     expect(again.status).toBe(201);
 
     const res = await req('GET', '/api/plugins/workflow/customers', undefined, adminCookie);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { customers: Array<{ display_name: string; email: string; codes: string[] }> };
+    const body = (await res.json()) as {
+      customers: Array<{ display_name: string; email: string; contact_number: string | null; codes: string[] }>;
+    };
     const codes = await Promise.all([first, again].map(async (r) => ((await r.json()) as { transaction: { code: string } }).transaction.code));
     expect(body.customers).toEqual([
-      expect.objectContaining({ display_name: 'Cust One', email: 'cust1@example.com', codes: [codes[1], codes[0]] }),
+      expect.objectContaining({
+        display_name: 'Cust One', email: 'cust1@example.com', contact_number: '0912 345 6789', codes: [codes[1], codes[0]],
+      }),
     ]);
+  });
+
+  it('generates <name>@dryyt.com when there is no email, numbering repeats of a name', async () => {
+    const adminCookie = await createUserWithRoleAndLogin('workflow-cust-gen@example.com', await getAdminRoleId(), 'Admin');
+    for (const contact of ['09170000001', '09170000002']) {
+      const res = await req('POST', '/api/plugins/workflow/transactions', {
+        customer_name: '  Juan  Dela Cruz ', customer_contact: contact,
+      }, adminCookie);
+      expect(res.status).toBe(201);
+    }
+    const list = (await (await req('GET', '/api/plugins/workflow/customers', undefined, adminCookie)).json()) as {
+      customers: Array<{ email: string; contact_number: string }>;
+    };
+    expect(list.customers.map((c) => [c.email, c.contact_number]).sort()).toEqual([
+      ['juandelacruz2@dryyt.com', '09170000002'],
+      ['juandelacruz@dryyt.com', '09170000001'],
+    ]);
+  });
+
+  it('does not register a customer without a contact number', async () => {
+    const adminCookie = await createUserWithRoleAndLogin('workflow-cust-nocontact@example.com', await getAdminRoleId(), 'Admin');
+    const res = await req('POST', '/api/plugins/workflow/transactions', {
+      customer_name: 'Walk-in', customer_email: 'walkin-nocontact@example.com',
+    }, adminCookie);
+    expect(res.status).toBe(201);
+    const list = (await (await req('GET', '/api/plugins/workflow/customers', undefined, adminCookie)).json()) as {
+      customers: unknown[];
+    };
+    expect(list.customers).toEqual([]);
   });
 
   it('skips registration for an email that already exists', async () => {
@@ -258,6 +319,7 @@ describe('GET /api/plugins/workflow/owners/:ownerId/transactions', () => {
       ['hold', '2026-01-04 00:00:00'],
     ]);
     for (const t of anon.transactions) {
+      expect(t.control_number).toMatch(/^\d{6}$/);
       expect(t.code).toBeNull();
       expect(t.customer_name).toBeNull();
       expect(t.description).toBeNull();
@@ -352,7 +414,7 @@ describe('GET /api/plugins/workflow/admin/transactions/:id', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { transaction: Record<string, unknown> };
     expect(body.transaction).toMatchObject({
-      owner_name: 'DetailOwner', customer_contact: '09123456789', image_ids: [],
+      owner_name: 'DetailOwner', customer_contact: '09123456789',
     });
     expect((await req('GET', `/api/plugins/workflow/admin/transactions/${created.transaction.id}`, undefined, ownerCookie)).status).toBe(403);
     expect((await req('GET', '/api/plugins/workflow/admin/transactions/999999', undefined, superCookie)).status).toBe(404);

@@ -43,7 +43,6 @@ interface AdminTransaction {
 interface PurgeResult {
   cutoff: string;
   transactions: number;
-  images: number;
 }
 
 interface AdminTransactionDetail extends AdminTransaction {
@@ -52,7 +51,8 @@ interface AdminTransactionDetail extends AdminTransaction {
   updated_at: string;
   done_at: string | null;
   owner_email: string;
-  image_ids: number[];
+  weight_kg: number | null;
+  control_number: string | null;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -406,7 +406,7 @@ function TransactionsPanel() {
   });
   const transactions = list.body?.transactions ?? [];
 
-  // Deletes every transaction created over 3 months ago, photos included —
+  // Deletes every transaction created over 3 months ago —
   // after showing how many that is.
   async function handlePurge() {
     setPurgeError(null);
@@ -422,14 +422,14 @@ function TransactionsPanel() {
       const before = formatDateTime(preview.cutoff);
       if (
         !window.confirm(
-          `Permanently delete ${preview.transactions} transaction(s) created before ${before}, ` +
-            `including ${preview.images} photo(s)? This can’t be undone.`,
+          `Permanently delete ${preview.transactions} transaction(s) created before ${before}? ` +
+            'This can’t be undone.',
         )
       ) {
         return;
       }
       const done = await apiFetch<PurgeResult>(path, { method: 'POST', body: JSON.stringify({}) });
-      setPurgeNotice(`Deleted ${done.transactions} transaction(s) and ${done.images} photo(s).`);
+      setPurgeNotice(`Deleted ${done.transactions} transaction(s).`);
       list.reload();
       setStaleTick((t) => t + 1);
     } catch (err) {
@@ -447,7 +447,7 @@ function TransactionsPanel() {
       {purgeNotice && <p className="m3-banner" role="status">{purgeNotice}</p>}
       {stale && stale.transactions > 0 && (
         <p className="m3-banner m3-banner--warning" role="alert">
-          {stale.transactions} transaction(s) ({stale.images} photo(s)) are more than 3 months old — created before{' '}
+          {stale.transactions} transaction(s) are more than 3 months old — created before{' '}
           {formatDateTime(stale.cutoff)}. Use “Delete” to remove them.
         </p>
       )}
@@ -478,7 +478,7 @@ function TransactionsPanel() {
             className="admin__action admin__action--danger"
             onClick={handlePurge}
             disabled={purging}
-            title="Delete transactions created more than 3 months ago, with their photos"
+            title="Delete transactions created more than 3 months ago"
           >
             {purging ? 'Deleting…' : 'Delete'}
           </button>
@@ -586,6 +586,10 @@ function TransactionDetailsDialog({ id, onClose }: { id: number; onClose: () => 
             </dd>
             <dt>Contact</dt>
             <dd>{detail.customer_contact ?? '—'}</dd>
+            <dt>Control number</dt>
+            <dd>{detail.control_number ?? '—'}</dd>
+            <dt>Weight</dt>
+            <dd>{detail.weight_kg === null ? '—' : `${detail.weight_kg} kg`}</dd>
             <dt>Registered</dt>
             <dd>{formatDateTime(detail.created_at)}</dd>
             <dt>Updated</dt>
@@ -598,24 +602,6 @@ function TransactionDetailsDialog({ id, onClose }: { id: number; onClose: () => 
             <RichText html={detail.description} />
           ) : (
             <p className="m3-supporting">No description.</p>
-          )}
-          {detail.image_ids.length > 0 && (
-            <>
-              <h3 className="m3-section-title">Photos</h3>
-              <ul className="admin__photos">
-                {detail.image_ids.map((imageId, i) => {
-                  const src = `/api/plugins/workflow/transactions/${detail.id}/images/${imageId}`;
-                  return (
-                    <li key={imageId}>
-                      {/* New tab, not Colorbox: its lightbox would sit under the modal <dialog>. */}
-                      <a href={src} target="_blank" rel="noreferrer" title={`Photo ${i + 1}`}>
-                        <img src={src} alt={`Photo ${i + 1}`} loading="lazy" />
-                      </a>
-                    </li>
-                  );
-                })}
-              </ul>
-            </>
           )}
         </>
       )}

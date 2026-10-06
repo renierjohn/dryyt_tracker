@@ -2,106 +2,14 @@ import { SELF, env } from 'cloudflare:test';
 import { describe, it, expect } from 'vitest';
 import { createUserWithRoleAndLogin, getOwnerRoleId } from '../helpers';
 
-const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46]);
-
-async function createTransactionWithCode(cookie: string): Promise<{ id: number; code: string }> {
-  const res = await SELF.fetch('https://example.com/api/plugins/workflow/transactions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Cookie: cookie },
-    body: JSON.stringify({ customer_name: 'Tracked with photos' }),
-  });
-  return ((await res.json()) as { transaction: { id: number; code: string } }).transaction;
-}
-
 async function createTransaction(cookie: string): Promise<number> {
   const res = await SELF.fetch('https://example.com/api/plugins/workflow/transactions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Cookie: cookie },
-    body: JSON.stringify({ customer_name: 'With photos' }),
+    body: JSON.stringify({ customer_name: 'Purge candidate' }),
   });
   return ((await res.json()) as { transaction: { id: number } }).transaction.id;
 }
-
-function upload(id: number, bytes: Uint8Array, cookie: string, type = 'image/jpeg') {
-  const form = new FormData();
-  form.append('file', new File([bytes], 'photo.jpg', { type }));
-  return SELF.fetch(`https://example.com/api/plugins/workflow/transactions/${id}/images`, {
-    method: 'POST',
-    headers: { Cookie: cookie },
-    body: form,
-  });
-}
-
-describe('transaction images', () => {
-  it('stores an image, lists it on the transaction and serves it back to the owner', async () => {
-    const cookie = await createUserWithRoleAndLogin('wf-img-owner@example.com', await getOwnerRoleId(), 'ImgOwner');
-    const id = await createTransaction(cookie);
-
-    const res = await upload(id, JPEG, cookie);
-    expect(res.status).toBe(201);
-    const { image } = (await res.json()) as { image: { id: number; size: number; content_type: string } };
-    expect(image).toMatchObject({ size: JPEG.length, content_type: 'image/jpeg' });
-
-    const list = (await (
-      await SELF.fetch('https://example.com/api/plugins/workflow/transactions', { headers: { Cookie: cookie } })
-    ).json()) as { transactions: { id: number; image_ids: number[] }[] };
-    expect(list.transactions.find((t) => t.id === id)?.image_ids).toEqual([image.id]);
-
-    const served = await SELF.fetch(`https://example.com/api/plugins/workflow/transactions/${id}/images/${image.id}`, {
-      headers: { Cookie: cookie },
-    });
-    expect(served.status).toBe(200);
-    expect(served.headers.get('content-type')).toBe('image/jpeg');
-    expect(new Uint8Array(await served.arrayBuffer())).toEqual(JPEG);
-  });
-
-  it('rejects files over 1 MB and non-images', async () => {
-    const cookie = await createUserWithRoleAndLogin('wf-img-limits@example.com', await getOwnerRoleId(), 'ImgLimits');
-    const id = await createTransaction(cookie);
-
-    const big = new Uint8Array(1024 * 1024 + 1);
-    big.set(JPEG);
-    const tooBig = await upload(id, big, cookie);
-    expect(tooBig.status).toBe(400);
-    expect(((await tooBig.json()) as { error: string }).error).toBe('file_too_large');
-
-    const notImage = await upload(id, new TextEncoder().encode('<svg onload=alert(1)>'), cookie, 'image/svg+xml');
-    expect(((await notImage.json()) as { error: string }).error).toBe('unsupported_file_type');
-  });
-
-  it("keeps images private to the transaction's owner", async () => {
-    const ownerRole = await getOwnerRoleId();
-    const cookie = await createUserWithRoleAndLogin('wf-img-private@example.com', ownerRole, 'ImgPrivate');
-    const other = await createUserWithRoleAndLogin('wf-img-other@example.com', ownerRole, 'ImgOther');
-    const id = await createTransaction(cookie);
-    const { image } = (await (await upload(id, JPEG, cookie)).json()) as { image: { id: number } };
-
-    expect((await upload(id, JPEG, other)).status).toBe(404);
-    const url = `https://example.com/api/plugins/workflow/transactions/${id}/images/${image.id}`;
-    expect((await SELF.fetch(url, { headers: { Cookie: other } })).status).toBe(404);
-    expect((await SELF.fetch(url)).status).toBe(401);
-  });
-
-  it('lists and serves photos on the public track-by-code lookup, but only with the right code', async () => {
-    const cookie = await createUserWithRoleAndLogin('wf-img-track@example.com', await getOwnerRoleId(), 'ImgTrack');
-    const { id, code } = await createTransactionWithCode(cookie);
-    const other = await createTransactionWithCode(cookie);
-    const { image } = (await (await upload(id, JPEG, cookie)).json()) as { image: { id: number } };
-
-    const lookup = (await (await SELF.fetch(`https://example.com/api/plugins/workflow/track/${code}`)).json()) as {
-      transaction: Record<string, unknown>;
-    };
-    expect(lookup.transaction.image_ids).toEqual([image.id]);
-    expect(lookup.transaction.id).toBeUndefined();
-
-    const served = await SELF.fetch(`https://example.com/api/plugins/workflow/track/${code.toLowerCase()}/images/${image.id}`);
-    expect(served.status).toBe(200);
-    expect(new Uint8Array(await served.arrayBuffer())).toEqual(JPEG);
-
-    const wrongCode = await SELF.fetch(`https://example.com/api/plugins/workflow/track/${other.code}/images/${image.id}`);
-    expect(wrongCode.status).toBe(404);
-  });
-});
 
 describe("customer's own transactions", () => {
   async function json(path: string, cookie: string, init: RequestInit = {}) {
@@ -120,7 +28,7 @@ describe("customer's own transactions", () => {
     return res.headers.get('set-cookie')!.split(';')[0];
   }
 
-  it('lists only transactions registered for the signed-in customer, with their photos', async () => {
+  it('lists only transactions registered for the signed-in customer', async () => {
     const owner = await createUserWithRoleAndLogin('my-txn-owner@example.com', await getOwnerRoleId(), 'Owner');
     await json('/api/owner/users', owner, {
       method: 'POST',
@@ -136,20 +44,13 @@ describe("customer's own transactions", () => {
       method: 'POST',
       body: JSON.stringify({ customer_name: 'Someone else' }),
     });
-    const imageId = ((await (await upload(mine.transaction.id, JPEG, owner)).json()) as { image: { id: number } }).image.id;
 
     const res = await json('/api/plugins/workflow/my-transactions', customer);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { transactions: Array<{ code: string; image_ids: number[]; customer_contact?: unknown }> };
+    const body = (await res.json()) as { transactions: Array<{ code: string; customer_contact?: unknown }> };
     expect(body.transactions).toHaveLength(1);
-    expect(body.transactions[0]).toMatchObject({ code: mine.transaction.code, image_ids: [imageId] });
+    expect(body.transactions[0]).toMatchObject({ code: mine.transaction.code });
     expect(body.transactions[0].customer_contact).toBeUndefined();
-
-    const photo = await SELF.fetch(
-      `https://example.com/api/plugins/workflow/transactions/${mine.transaction.id}/images/${imageId}`,
-      { headers: { Cookie: customer } },
-    );
-    expect(photo.status).toBe(200);
     // Still can't list/manage the owner's transactions.
     expect((await json('/api/plugins/workflow/transactions', customer)).status).toBe(403);
   });
@@ -220,14 +121,11 @@ describe('owner page viewed by another owner', () => {
 });
 
 describe('POST /api/plugins/workflow/admin/transactions/purge-old', () => {
-  it('deletes transactions over 3 months old with their photos, keeping newer ones', async () => {
+  it('deletes transactions over 3 months old, keeping newer ones', async () => {
     const owner = await createUserWithRoleAndLogin('purge-owner@example.com', await getOwnerRoleId(), 'PurgeOwner');
     const oldId = await createTransaction(owner);
     const newId = await createTransaction(owner);
-    const oldImage = ((await (await upload(oldId, JPEG, owner)).json()) as { image: { id: number } }).image.id;
-    await upload(newId, JPEG, owner);
     await env.DB.prepare("UPDATE workflow_transactions SET created_at = datetime('now', '-4 months') WHERE id = ?").bind(oldId).run();
-    const oldKey = (await env.DB.prepare('SELECT r2_key FROM workflow_transaction_images WHERE id = ?').bind(oldImage).first<{ r2_key: string }>())!.r2_key;
 
     const superCookie = await createUserWithRoleAndLogin('purge-super@example.com', 1, 'Super');
     const purge = (body: unknown, cookie = superCookie) =>
@@ -239,16 +137,14 @@ describe('POST /api/plugins/workflow/admin/transactions/purge-old', () => {
 
     expect((await purge({}, owner)).status).toBe(403);
 
-    const preview = (await (await purge({ dry_run: true })).json()) as { transactions: number; images: number; dry_run: boolean };
+    const preview = (await (await purge({ dry_run: true })).json()) as { transactions: number; dry_run: boolean };
     expect(preview).toMatchObject({ dry_run: true });
     expect(preview.transactions).toBeGreaterThanOrEqual(1);
-    expect(await env.TRANSACTION_IMAGES.get(oldKey)).not.toBeNull();
+    expect(await env.DB.prepare('SELECT id FROM workflow_transactions WHERE id = ?').bind(oldId).first()).not.toBeNull();
 
     const res = await purge({});
     expect(res.status).toBe(200);
     expect(await env.DB.prepare('SELECT id FROM workflow_transactions WHERE id = ?').bind(oldId).first()).toBeNull();
-    expect(await env.DB.prepare('SELECT id FROM workflow_transaction_images WHERE id = ?').bind(oldImage).first()).toBeNull();
-    expect(await env.TRANSACTION_IMAGES.get(oldKey)).toBeNull();
     expect(await env.DB.prepare('SELECT id FROM workflow_transactions WHERE id = ?').bind(newId).first()).not.toBeNull();
   });
 });

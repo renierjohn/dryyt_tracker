@@ -14,5 +14,4 @@ export { RichTextEditor, StoreInfo } from '../src/components/LazyHeavy';
 export type { RichTextEditorInstance } from '../src/components/RichTextEditor';
 export { default as RichText } from '../src/components/RichText';
 export { CONTACT_ERROR, isInvalidContact } from '../src/lib/contact';
-export { useColorbox } from '../src/lib/useColorbox';
 export type { StoreDetails } from '../src/lib/store';

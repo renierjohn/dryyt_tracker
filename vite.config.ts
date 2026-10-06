@@ -10,7 +10,7 @@ export default defineConfig({
       // (the worker) so `yarn dev` (vite, HMR) can exercise the real backend instead
       // of 404ing against vite's own dev server.
       '/api': {
-        target: 'http://localhost:8787',
+        target: 'http://localhost:8788',
         changeOrigin: true,
       },
     },
