@@ -5,8 +5,11 @@ import {
   getUserByEmail,
   getUserById,
   getRoleByName,
-  listUsersByParent,
+  isOwnerCustomer,
+  listOwnerCustomers,
   setUserActive,
+  unlinkSharedCustomer,
+  updateCoordinates,
   updateStoreDetails,
   updateUserProfile,
 } from '../db';
@@ -16,8 +19,8 @@ import { hashPassword } from '../crypto';
 import { isValidContactNumber, isValidEmail } from '../util';
 import type { AppBindings } from '../types';
 
-// Self-service: an 'owner' role user creates and lists their own child accounts
-// (always role 'user', parent_id set to the owner), separate from the
+// Self-service: an 'owner' role user creates and lists their own customer
+// accounts (always role 'user', linked via owner_customers), separate from the
 // superadmin-only /admin/users console.
 export const ownerRoutes = new Hono<AppBindings>();
 
@@ -25,7 +28,7 @@ ownerRoutes.use('*', requireRole('owner'));
 
 ownerRoutes.get('/users', async (c) => {
   const owner = c.get('user')!;
-  const users = await listUsersByParent(c.env.DB, owner.id);
+  const users = await listOwnerCustomers(c.env.DB, owner.id);
   return c.json({
     users: users.map((u) => ({
       id: u.id,
@@ -38,10 +41,11 @@ ownerRoutes.get('/users', async (c) => {
   });
 });
 
-// One of the owner's own child users, or null — owners can't touch anyone else.
+// One of the owner's own customers (including ones shared with other owners),
+// or null — owners can't touch anyone else.
 async function getOwnChild(db: D1Database, ownerId: number, id: number) {
-  const user = await getUserById(db, id);
-  return user && user.parent_id === ownerId ? user : null;
+  if (!(await isOwnerCustomer(db, ownerId, id))) return null;
+  return getUserById(db, id);
 }
 
 ownerRoutes.put('/users/:id', async (c) => {
@@ -88,12 +92,15 @@ ownerRoutes.put('/users/:id', async (c) => {
   });
 });
 
-// "Delete" deactivates: the row stays so sessions/alerts/transactions history
-// keep their references; the user can no longer sign in.
+// "Delete" removes the customer from this owner. A customer shared with other
+// owners just loses this link; otherwise it deactivates — the row (and link)
+// stays so sessions/alerts/transactions history keep their references, but the
+// user can no longer sign in.
 ownerRoutes.delete('/users/:id', async (c) => {
   const owner = c.get('user')!;
   const target = await getOwnChild(c.env.DB, owner.id, Number(c.req.param('id')));
   if (!target) return c.json({ error: 'not_found' }, 404);
+  if (await unlinkSharedCustomer(c.env.DB, owner.id, target.id)) return c.json({ ok: true });
   await setUserActive(c.env.DB, target.id, false);
   await deleteSessionsForUser(c.env.DB, target.id);
   return c.json({ ok: true });
@@ -174,4 +181,18 @@ ownerRoutes.put('/store', async (c) => {
     openingHours: details.opening_hours ? JSON.stringify(details.opening_hours) : null,
   });
   return c.json({ store: details });
+});
+
+// Just the store's map coordinates (Profile tab → "Your coordinates"). Both
+// null clears them.
+ownerRoutes.put('/coordinates', async (c) => {
+  const body = await c.req.json().catch(() => null);
+  const lat = body?.lat ?? null;
+  const lng = body?.lng ?? null;
+  if (lat !== null || lng !== null) {
+    if (typeof lat !== 'number' || typeof lng !== 'number') return c.json({ error: 'invalid_location' }, 400);
+    if (!(Math.abs(lat) <= 90) || !(Math.abs(lng) <= 180)) return c.json({ error: 'invalid_location' }, 400);
+  }
+  await updateCoordinates(c.env.DB, c.get('user')!.id, lat, lng);
+  return c.json({ lat, lng });
 });

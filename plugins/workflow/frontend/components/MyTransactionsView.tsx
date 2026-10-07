@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { apiFetch, ApiError, useSession, AppShell, RichText } from '../../../sdk';
 import TransactionDialog from './TransactionDialog';
 import { STATUS_LABELS } from '../status';
@@ -7,6 +8,8 @@ import '../workflow.scss';
 
 interface MyTransaction {
   id: number;
+  control_number: string | null;
+  owner_name: string;
   code: string;
   customer_name: string;
   description: string | null;
@@ -43,6 +46,8 @@ export default function MyTransactionsView() {
               <table className="m3-table">
                 <thead>
                   <tr>
+                    <th>Control #</th>
+                    <th>Owner</th>
                     <th>Code</th>
                     <th>Description</th>
                     <th>Status</th>
@@ -53,7 +58,13 @@ export default function MyTransactionsView() {
                 <tbody>
                   {transactions.map((t) => (
                     <tr key={t.id}>
-                      <td><code>{t.code}</code></td>
+                      <td>{t.control_number ?? '—'}</td>
+                      <td>{t.owner_name}</td>
+                      <td>
+                        <Link to={`/track?${new URLSearchParams({ code: t.code })}`} title="Track this order">
+                          <code>{t.code}</code>
+                        </Link>
+                      </td>
                       <td>
                         <button type="button" className="txn-desc" onClick={() => setOpenTransaction(t)}>
                           {t.description ? (

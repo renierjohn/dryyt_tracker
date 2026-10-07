@@ -5,7 +5,10 @@ import {
   getActiveOwnerByIdentifier,
   getRoleByName,
   getUserByEmail,
-  listUsersByParent,
+  isOwnerCustomer,
+  linkOwnerCustomer,
+  findCustomerByContact,
+  listOwnerCustomers,
 } from '../../../worker/db';
 import { isValidContactNumber, isValidEmail } from '../../../worker/util';
 import { likePattern, parsePage, PAGE_SIZE } from '../../../worker/pagination';
@@ -36,11 +39,18 @@ async function cleanDescription(raw: unknown): Promise<string | null> {
 // single-purpose plugin routers (e.g. hello, alerts) do it.
 const workflowRoutes = new Hono<AppBindings>();
 
-// Public lookup by code. Knowing the code is the access check.
+// Public lookup by code. Knowing the code is the access check. The registering
+// owner's name and store address are included — both are already public on
+// their store page.
 workflowRoutes.get('/track/:code', async (c) => {
   const code = c.req.param('code').toUpperCase();
   const row = await c.env.DB
-    .prepare('SELECT code, customer_name, description, status, updated_at FROM workflow_transactions WHERE code = ?')
+    .prepare(
+      `SELECT t.code, t.control_number, t.customer_name, t.description, t.status, t.updated_at,
+              o.display_name AS owner_name, o.address AS owner_address
+       FROM workflow_transactions t JOIN users o ON o.id = t.created_by
+       WHERE t.code = ?`,
+    )
     .bind(code)
     .first<{ description: string | null }>();
   if (!row) return c.json({ error: 'not_found' }, 404);
@@ -61,7 +71,9 @@ workflowRoutes.get('/track/:code', async (c) => {
 // Signed-in visitors get every transaction, newest first — in full, except
 // for 'user'-role customers and other owners: they only see code/customer/
 // description on their own transactions (customer_user_id) — the rest come
-// back NULL — and never done_at. control_number is shown to everyone: it's a
+// back NULL — and never done_at. Both are further limited to the open queue
+// (in-progress and on-hold); customers follow their own orders through
+// /my-transactions and /track/:code. control_number is shown to everyone: it's a
 // sequential ticket number, not the code that unlocks /track/:code.
 workflowRoutes.get('/owners/:identifier/transactions', async (c) => {
   const owner = await getActiveOwnerByIdentifier(c.env.DB, c.req.param('identifier'));
@@ -81,7 +93,8 @@ workflowRoutes.get('/owners/:identifier/transactions', async (c) => {
              CASE WHEN customer_user_id = ?2 THEN customer_name END AS customer_name,
              CASE WHEN customer_user_id = ?2 THEN description END AS description,
              status, created_at, updated_at
-           FROM workflow_transactions WHERE created_by = ?1 ORDER BY created_at DESC, id DESC`,
+           FROM workflow_transactions WHERE created_by = ?1 AND status IN ('in_progress', 'hold')
+         ORDER BY created_at DESC, id DESC`,
         ).bind(owner.id, user.id)
       : c.env.DB.prepare(
           `SELECT id, control_number, code, customer_name, description, status, created_at, updated_at, done_at
@@ -202,24 +215,24 @@ workflowRoutes.post('/transactions', requirePermission('manage_users'), async (c
   if (customerEmail && !isValidEmail(customerEmail)) return c.json({ error: 'invalid_email' }, 400);
   if (customerContact && !isValidContactNumber(customerContact)) return c.json({ error: 'invalid_contact_number' }, 400);
 
-  // The contact number is the customer's key among this owner's users (role
-  // 'user', parent_id = owner): a matching user is linked. Failing that, an
-  // email that's already registered is linked when it's one of this owner's
-  // users. Otherwise, with a name and contact number, the customer becomes a
-  // new user — under the given email, or <name>@dryyt.com when there's none —
-  // with a random password they can replace via forgot-password.
+  // The contact number is the customer's key across all owners: a 'user'
+  // account with that number — this owner's, another owner's, or one with no
+  // owner — is linked to the transaction and shared with this owner (their
+  // other owners keep them). Without a contact number, an email that's already
+  // registered is linked when it's one of this owner's users. Otherwise, with
+  // a contact number, the customer becomes a new user — under the given email,
+  // or <name>@dryyt.com when there's none — with a random password they can
+  // replace via forgot-password.
   let customerUserId: number | null = null;
-  const contactKey = customerContact ? normalizeContact(customerContact) : '';
-  const byContact = contactKey
-    ? (await listUsersByParent(c.env.DB, admin.id)).find(
-        (u) => u.contact_number && normalizeContact(u.contact_number) === contactKey,
-      )
-    : undefined;
+  const byContact = customerContact
+    ? await findCustomerByContact(c.env.DB, normalizeContact(customerContact), admin.id)
+    : null;
   const byEmail = !byContact && customerEmail ? await getUserByEmail(c.env.DB, customerEmail) : null;
   if (byContact) {
+    await linkOwnerCustomer(c.env.DB, admin.id, byContact.id);
     customerUserId = byContact.id;
   } else if (byEmail) {
-    if (byEmail.parent_id === admin.id) customerUserId = byEmail.id;
+    if (await isOwnerCustomer(c.env.DB, admin.id, byEmail.id)) customerUserId = byEmail.id;
   } else if (customerContact) {
     const userRole = await getRoleByName(c.env.DB, 'user');
     if (!userRole) return c.json({ error: 'role_not_configured' }, 500);
@@ -309,7 +322,7 @@ workflowRoutes.get('/transactions/next-control-number', requirePermission('manag
 // dashboard users list — each with the codes of transactions registered for them.
 workflowRoutes.get('/customers', requirePermission('manage_users'), async (c) => {
   const ownerId = c.get('user')!.id;
-  const users = await listUsersByParent(c.env.DB, ownerId);
+  const users = await listOwnerCustomers(c.env.DB, ownerId);
   const { results: txns } = await c.env.DB
     .prepare(
       `SELECT customer_user_id, code FROM workflow_transactions
@@ -448,13 +461,16 @@ workflowRoutes.get('/admin/transactions/:id', requireRole('superadmin'), async (
 });
 
 // A customer's own view: transactions registered for them (customer_user_id),
-// across whichever owners registered them. Contact/created_by stay server-side.
+// across whichever owners registered them — each with that owner's name.
+// Contact/created_by stay server-side.
 workflowRoutes.get('/my-transactions', requireAuth, async (c) => {
   const user = c.get('user')!;
   const { results } = await c.env.DB
     .prepare(
-      `SELECT id, code, customer_name, description, status, created_at, updated_at, done_at
-       FROM workflow_transactions WHERE customer_user_id = ? ORDER BY created_at DESC, id DESC`,
+      `SELECT t.id, t.control_number, t.code, t.customer_name, t.description, t.status,
+              t.created_at, t.updated_at, t.done_at, o.display_name AS owner_name
+       FROM workflow_transactions t JOIN users o ON o.id = t.created_by
+       WHERE t.customer_user_id = ? ORDER BY t.created_at DESC, t.id DESC`,
     )
     .bind(user.id)
     .all<{ id: number; description: string | null }>();

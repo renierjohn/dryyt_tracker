@@ -6,7 +6,7 @@ import { toPublicUser } from '../util';
 import type { AppBindings } from '../types';
 
 export const SESSION_COOKIE = 'session';
-const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 function setSessionCookie(c: Context<AppBindings>, token: string): void {
   // Derive from hostname, not protocol: a misconfigured proxy or a workers.dev host

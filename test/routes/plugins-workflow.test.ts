@@ -114,12 +114,12 @@ describe('customer email registration', () => {
     const adminRoleId = await getAdminRoleId();
     const adminCookie = await createUserWithRoleAndLogin('workflow-cust-owner@example.com', adminRoleId, 'Admin');
     const first = await req('POST', '/api/plugins/workflow/transactions', {
-      customer_name: 'Cust One', customer_contact: '0912 345 6789', customer_email: 'Cust1@Example.com',
+      customer_name: 'Cust One', customer_contact: '0912 345 6700', customer_email: 'Cust1@Example.com',
     }, adminCookie);
     expect(first.status).toBe(201);
     // Same number, formatted differently and without an email: linked, not re-created.
     const again = await req('POST', '/api/plugins/workflow/transactions', {
-      customer_name: 'Other Name', customer_contact: '09123456789',
+      customer_name: 'Other Name', customer_contact: '09123456700',
     }, adminCookie);
     expect(again.status).toBe(201);
 
@@ -131,7 +131,7 @@ describe('customer email registration', () => {
     const codes = await Promise.all([first, again].map(async (r) => ((await r.json()) as { transaction: { code: string } }).transaction.code));
     expect(body.customers).toEqual([
       expect.objectContaining({
-        display_name: 'Cust One', email: 'cust1@example.com', contact_number: '0912 345 6789', codes: [codes[1], codes[0]],
+        display_name: 'Cust One', email: 'cust1@example.com', contact_number: '0912 345 6700', codes: [codes[1], codes[0]],
       }),
     ]);
   });
@@ -261,6 +261,9 @@ describe('GET /api/plugins/workflow/track/:code', () => {
     const body = (await res.json()) as { transaction: Record<string, unknown> };
     expect(body.transaction.customer_name).toBe('Track Target');
     expect(body.transaction.status).toBe('hold');
+    expect(body.transaction.control_number).toMatch(/^\d{6}$/);
+    expect(body.transaction.owner_name).toBe('Admin');
+    expect(body.transaction.owner_address).toBeNull();
     expect(body.transaction.customer_contact).toBeUndefined();
     expect(body.transaction.created_by).toBeUndefined();
   });
@@ -363,6 +366,28 @@ describe('GET /api/plugins/workflow/owners/:ownerId/transactions', () => {
       transactions: unknown[];
     };
     expect(signedIn.transactions).toHaveLength(6);
+  });
+
+  it('shows another owner only in-progress and on-hold transactions', async () => {
+    const ownerRoleId = await getOwnerRoleId();
+    const ownerCookie = await createUserWithRoleAndLogin('workflow-rival-target@example.com', ownerRoleId, 'RivalTarget');
+    const rivalCookie = await createUserWithRoleAndLogin('workflow-rival-viewer@example.com', ownerRoleId, 'RivalViewer');
+    for (const status of ['hold', 'in_progress', 'done', 'ready_to_pickup', 'end']) {
+      const res = await req('POST', '/api/plugins/workflow/transactions', { customer_name: status }, ownerCookie);
+      const { transaction } = (await res.json()) as { transaction: { id: number } };
+      await env.DB.prepare('UPDATE workflow_transactions SET status = ? WHERE id = ?').bind(status, transaction.id).run();
+    }
+
+    const rival = (await (await req('GET', '/api/plugins/workflow/owners/RivalTarget/transactions', undefined, rivalCookie)).json()) as {
+      transactions: Array<Record<string, unknown>>;
+    };
+    expect(rival.transactions.map((t) => t.status).sort()).toEqual(['hold', 'in_progress']);
+    for (const t of rival.transactions) expect(t.customer_name).toBeNull();
+
+    const self = (await (await req('GET', '/api/plugins/workflow/owners/RivalTarget/transactions', undefined, ownerCookie)).json()) as {
+      transactions: unknown[];
+    };
+    expect(self.transactions).toHaveLength(5);
   });
 
   it('returns 404 for a non-owner user id', async () => {
@@ -537,5 +562,81 @@ describe('POST /api/plugins/workflow/pickup', () => {
     const otherCookie = await createUserWithRoleAndLogin('workflow-pickup-b@example.com', await getOwnerRoleId(), 'Other');
     const res = await req('POST', '/api/plugins/workflow/pickup', { code: transaction.code }, otherCookie);
     expect(res.status).toBe(404);
+  });
+});
+
+describe('customers shared between owners', () => {
+  type Txn = { transaction: { customer_user_id: number | null } };
+  const register = async (cookie: string, customer_name: string, customer_contact: string) =>
+    ((await (await req('POST', '/api/plugins/workflow/transactions', { customer_name, customer_contact }, cookie)).json()) as Txn)
+      .transaction.customer_user_id;
+  const customerIds = async (cookie: string) =>
+    ((await (await req('GET', '/api/owner/users', undefined, cookie)).json()) as { users: Array<{ id: number; is_active: number }> })
+      .users;
+  const parentOf = async (id: number) =>
+    (await env.DB.prepare('SELECT parent_id FROM users WHERE id = ?').bind(id).first<{ parent_id: number | null }>())!.parent_id;
+  const idOf = async (cookie: string) =>
+    ((await (await req('GET', '/api/auth/me', undefined, cookie)).json()) as { user: { id: number } }).user.id;
+
+  it("links another owner's customer with the same contact number", async () => {
+    const ownerRoleId = await getOwnerRoleId();
+    const a = await createUserWithRoleAndLogin('share-a@example.com', ownerRoleId, 'ShareA');
+    const b = await createUserWithRoleAndLogin('share-b@example.com', ownerRoleId, 'ShareB');
+
+    const customerId = (await register(a, 'Shared Juan', '0917 111 2222'))!;
+    expect(await register(b, '  shared juan ', '09171112222')).toBe(customerId);
+
+    expect((await customerIds(a)).map((u) => u.id)).toContain(customerId);
+    expect((await customerIds(b)).map((u) => u.id)).toContain(customerId);
+    expect(await parentOf(customerId)).toBe(await idOf(a));
+    // Registering again doesn't duplicate the link.
+    expect(await register(b, 'Shared Juan', '09171112222')).toBe(customerId);
+    expect((await customerIds(b)).filter((u) => u.id === customerId)).toHaveLength(1);
+  });
+
+  it('links a customer with no owner and makes this owner their home owner', async () => {
+    const b = await createUserWithRoleAndLogin('share-orphan-b@example.com', await getOwnerRoleId(), 'OrphanB');
+    const orphan = await env.DB
+      .prepare(
+        `INSERT INTO users (email, password_hash, password_salt, role_id, display_name, contact_number)
+         VALUES ('orphan@example.com', 'x', 'x', (SELECT id FROM roles WHERE name = 'user'), 'Orphan Ana', '0918-333-4444')
+         RETURNING id`,
+      )
+      .first<{ id: number }>();
+
+    expect(await register(b, 'Orphan Ana', '09183334444')).toBe(orphan!.id);
+    expect(await parentOf(orphan!.id)).toBe(await idOf(b));
+  });
+
+  it('matches on contact number alone, whatever name the transaction uses', async () => {
+    const ownerRoleId = await getOwnerRoleId();
+    const a = await createUserWithRoleAndLogin('share-name-a@example.com', ownerRoleId, 'NameA');
+    const b = await createUserWithRoleAndLogin('share-name-b@example.com', ownerRoleId, 'NameB');
+    const first = await register(a, 'Pedro One', '09195556666');
+    expect(first).not.toBeNull();
+    expect(await register(b, 'Pedro Two', '+0919-555-6666')).toBe(first);
+  });
+
+  it('registers no customer account without a contact number', async () => {
+    const a = await createUserWithRoleAndLogin('share-nocontact@example.com', await getOwnerRoleId(), 'NoContact');
+    const res = await req('POST', '/api/plugins/workflow/transactions', { customer_name: 'Walk In' }, a);
+    expect(((await res.json()) as Txn).transaction.customer_user_id).toBeNull();
+  });
+
+  it('delete unlinks a shared customer, and deactivates once only one owner is left', async () => {
+    const ownerRoleId = await getOwnerRoleId();
+    const a = await createUserWithRoleAndLogin('share-del-a@example.com', ownerRoleId, 'DelA');
+    const b = await createUserWithRoleAndLogin('share-del-b@example.com', ownerRoleId, 'DelB');
+    const customerId = (await register(a, 'Del Carla', '09207778888'))!;
+    await register(b, 'Del Carla', '09207778888');
+
+    // The home owner leaves: the customer stays active, now homed with B.
+    expect((await req('DELETE', `/api/owner/users/${customerId}`, undefined, a)).status).toBe(200);
+    expect((await customerIds(a)).map((u) => u.id)).not.toContain(customerId);
+    expect((await customerIds(b)).find((u) => u.id === customerId)?.is_active).toBe(1);
+    expect(await parentOf(customerId)).toBe(await idOf(b));
+
+    expect((await req('DELETE', `/api/owner/users/${customerId}`, undefined, b)).status).toBe(200);
+    expect((await customerIds(b)).find((u) => u.id === customerId)?.is_active).toBe(0);
   });
 });

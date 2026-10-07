@@ -11,6 +11,9 @@ import '../assets/sass/track.scss';
 
 interface TrackedTransaction {
   code: string;
+  control_number: string | null;
+  owner_name: string;
+  owner_address: string | null;
   customer_name: string;
   description: string | null;
   status: string;
@@ -114,9 +117,16 @@ export default function Track() {
 
         {transaction && (
           <article className="m3-card track__result">
+            <header className="track__owner">
+              <h2>{transaction.owner_name}</h2>
+              {transaction.owner_address && <p>{transaction.owner_address}</p>}
+            </header>
             <div className="track__result-head">
               <div className="track__result-id">
-                <code className="track__code">{transaction.code}</code>
+                <div className="track__control">
+                  <span>Control Number</span>
+                  <code className="track__code">{transaction.control_number ?? '—'}</code>
+                </div>
                 <span className={`track__chip track__chip--${transaction.status}`}>
                   {STATUS_LABELS[transaction.status] ?? transaction.status}
                 </span>

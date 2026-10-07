@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { getUserById, searchUsersWithRoles, userStats, updateUserAdminFields, setUserActive, getUserByEmail, getRoleById, listRoles, createUser, deleteSessionsForUser } from '../db';
+import { getUserById, searchUsersWithRoles, userStats, updateUserAdminFields, setUserActive, getUserByEmail, getRoleById, listRoles, createUser, deleteSessionsForUser, listSessions, deleteExpiredSessions } from '../db';
 import { requireRole, startMasquerade } from '../middleware/auth';
 import { hashPassword } from '../crypto';
 import { isValidEmail, toPublicUser } from '../util';
@@ -33,10 +33,26 @@ adminRoutes.get('/users', async (c) => {
       avatar_key: u.avatar_key,
       role_id: u.role_id,
       role_name: u.role_name,
+      parent_id: u.parent_id,
       is_active: u.is_active,
       created_at: u.created_at,
     })),
   });
+});
+
+const SESSIONS_LIMIT = 200;
+
+// Every login session, split into active and expired (each newest first, at
+// most SESSIONS_LIMIT rows; the totals are exact).
+adminRoutes.get('/sessions', async (c) => {
+  const { active, expired, activeTotal, expiredTotal } = await listSessions(c.env.DB, SESSIONS_LIMIT);
+  return c.json({ active, expired, active_total: activeTotal, expired_total: expiredTotal });
+});
+
+// Expired sessions are already rejected at sign-in (loadSession); this just
+// clears the rows out.
+adminRoutes.delete('/sessions/expired', async (c) => {
+  return c.json({ deleted: await deleteExpiredSessions(c.env.DB) });
 });
 
 // Superadmin (id 1) is excluded: it can never be assigned via the create/edit

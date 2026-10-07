@@ -39,6 +39,7 @@ describe('GET /api/admin/users', () => {
     };
     const found = body.users.find((u) => u.email === 'admin-list@example.com')!;
     expect(found.role_name).toBe('superadmin');
+    expect(found).toHaveProperty('parent_id', null);
     expect(found.password_hash).toBeUndefined();
     expect(found.password_salt).toBeUndefined();
   });

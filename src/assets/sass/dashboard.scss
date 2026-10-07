@@ -149,6 +149,13 @@
     }
   }
 
+  &__hint {
+    margin: -4px 0 0;
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--m3-on-surface-variant, var(--text));
+  }
+
   &__saved {
     font-size: 13px;
     color: #15803d;
@@ -508,6 +515,17 @@
     background: var(--m3-secondary-container);
   }
 
+  .dashboard__form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .dashboard__button--tonal {
+    color: var(--m3-on-surface);
+    background: var(--m3-secondary-container);
+  }
+
   .dashboard__table {
     th,
     td {
@@ -524,6 +542,39 @@
 
     td {
       color: var(--m3-on-surface);
+    }
+
+    // Inline edit row: same outlined field as .dashboard__form, compacted to
+    // the row height.
+    input {
+      width: 100%;
+      min-width: 140px;
+      height: 40px;
+      padding: 0 12px;
+      box-sizing: border-box;
+      font: 400 14px var(--m3-font);
+      color: var(--m3-on-surface);
+      background: transparent;
+      border: 1px solid var(--m3-outline);
+      border-radius: 4px;
+
+      &:hover:not(:disabled) {
+        border-color: var(--m3-on-surface);
+      }
+
+      &:focus,
+      &:focus-visible {
+        outline: none;
+        border: 2px solid var(--m3-primary);
+        padding: 0 11px;
+      }
+
+      &:disabled {
+        color: var(--m3-on-surface-variant);
+        background: color-mix(in srgb, var(--m3-on-surface) 4%, transparent);
+        border-color: color-mix(in srgb, var(--m3-outline) 50%, transparent);
+        cursor: not-allowed;
+      }
     }
   }
 

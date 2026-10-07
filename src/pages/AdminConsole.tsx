@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { apiFetch, ApiError } from '../lib/api';
 import AlertEditor, { type AlertFormValues } from '../components/AlertEditor';
 import AppShell from '../components/AppShell';
+import Dialog from '../components/Dialog';
 import RichText from '../components/RichText';
 import type { AuthUser } from '../lib/useCurrentUser';
 import ProfileSettings from './ProfileSettings';
@@ -15,6 +16,7 @@ interface AdminUser {
   avatar_key: string | null;
   role_id: number;
   role_name: string;
+  parent_id: number | null;
   is_active: number;
   created_at: string;
 }
@@ -24,9 +26,32 @@ interface Role {
   name: string;
 }
 
-type AdminTab = 'users' | 'transactions' | 'profile';
+type AdminTab = 'users' | 'transactions' | 'sessions' | 'profile';
 
-const TAB_LABELS: Record<AdminTab, string> = { users: 'Users', transactions: 'Transactions', profile: 'Profile' };
+const TAB_LABELS: Record<AdminTab, string> = {
+  users: 'Users',
+  transactions: 'Transactions',
+  sessions: 'Sessions',
+  profile: 'Profile',
+};
+
+interface AdminSession {
+  id: number;
+  user_id: number;
+  user_name: string;
+  user_email: string;
+  role_name: string;
+  impersonator_name: string | null;
+  created_at: string;
+  expires_at: string;
+}
+
+interface SessionsBody {
+  active: AdminSession[];
+  expired: AdminSession[];
+  active_total: number;
+  expired_total: number;
+}
 
 interface AdminTransaction {
   id: number;
@@ -191,6 +216,7 @@ export default function AdminConsole({ user, refresh }: { user: AuthUser; refres
 
         {tab === 'profile' && <ProfileSettings user={user} refresh={refresh} />}
         {tab === 'transactions' && <TransactionsPanel />}
+        {tab === 'sessions' && <SessionsPanel />}
 
         {tab === 'users' && (
           <>
@@ -281,6 +307,9 @@ export default function AdminConsole({ user, refresh }: { user: AuthUser; refres
                                 <span className="admin__user-name">
                                   {u.display_name}
                                   {u.id === user.id && <span className="admin__you">you</span>}
+                                  {u.role_name === 'user' && u.parent_id === null && (
+                                    <span className="admin__new" title="Not linked to any owner yet">new</span>
+                                  )}
                                 </span>
                                 <span className="admin__user-email">{u.email}</span>
                               </span>
@@ -588,6 +617,130 @@ function TransactionsPanel() {
   );
 }
 
+function SessionsPanel() {
+  const [body, setBody] = useState<SessionsBody | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<SessionsBody>('/admin/sessions')
+      .then((result) => {
+        if (!cancelled) setBody(result);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(errorMessage(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tick]);
+
+  async function deleteExpired() {
+    setConfirming(false);
+    setError(null);
+    setNotice(null);
+    setDeleting(true);
+    try {
+      const { deleted } = await apiFetch<{ deleted: number }>('/admin/sessions/expired', { method: 'DELETE' });
+      setNotice(`Deleted ${deleted} expired session(s).`);
+      setTick((t) => t + 1);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <>
+      {error && <p className="m3-banner m3-banner--error" role="alert">{error}</p>}
+      {notice && <p className="m3-banner" role="status">{notice}</p>}
+      <div className="m3-card m3-card--flush">
+        <div className="admin__toolbar">
+          <h2 className="m3-card__title">Active ({body?.active_total ?? '…'})</h2>
+        </div>
+        <SessionsTable sessions={body?.active} total={body?.active_total} empty="No active sessions." />
+      </div>
+      <div className="m3-card m3-card--flush admin__sessions-expired">
+        <div className="admin__toolbar">
+          <h2 className="m3-card__title">Expired ({body?.expired_total ?? '…'})</h2>
+          <button
+            type="button"
+            className="admin__action admin__action--danger"
+            onClick={() => setConfirming(true)}
+            disabled={deleting || !body?.expired_total}
+            title="Delete every expired session"
+          >
+            {deleting ? 'Deleting…' : 'Delete'}
+          </button>
+        </div>
+        <SessionsTable sessions={body?.expired} total={body?.expired_total} empty="No expired sessions." />
+      </div>
+      {confirming && body && (
+        <Dialog title="Delete expired sessions?" onClose={() => setConfirming(false)}>
+          <p>Permanently delete {body.expired_total} expired session(s)? Active sessions aren’t affected.</p>
+          <div className="admin__dialog-actions">
+            <button type="button" className="m3-button m3-button--tonal" onClick={() => setConfirming(false)}>
+              Cancel
+            </button>
+            <button type="button" className="m3-button admin__dialog-danger" onClick={() => void deleteExpired()}>
+              Delete
+            </button>
+          </div>
+        </Dialog>
+      )}
+    </>
+  );
+}
+
+function SessionsTable({ sessions, total, empty }: { sessions?: AdminSession[]; total?: number; empty: string }) {
+  if (!sessions) return <p className="m3-supporting admin__empty">Loading…</p>;
+  if (sessions.length === 0) return <p className="m3-supporting admin__empty">{empty}</p>;
+  return (
+    <>
+      <div className="m3-table-wrap">
+        <table className="m3-table admin__table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>User</th>
+              <th>Role</th>
+              <th>Signed in</th>
+              <th>Expires</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sessions.map((s) => (
+              <tr key={s.id}>
+                <td>{s.id}</td>
+                <td>
+                  <span className="admin__user-text">
+                    <span className="admin__user-name">{s.user_name}</span>
+                    <span className="admin__user-email">
+                      {s.user_email}
+                      {s.impersonator_name && ` · masqueraded by ${s.impersonator_name}`}
+                    </span>
+                  </span>
+                </td>
+                <td>{s.role_name}</td>
+                <td className="m3-table__nowrap">{formatDateTime(s.created_at)}</td>
+                <td className="m3-table__nowrap">{formatDateTime(s.expires_at)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {total !== undefined && total > sessions.length && (
+        <p className="m3-supporting admin__empty">Showing the newest {sessions.length} of {total}.</p>
+      )}
+    </>
+  );
+}
+
 function TransactionDetailsDialog({ id, onClose }: { id: number; onClose: () => void }) {
   const [detail, setDetail] = useState<AdminTransactionDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -759,38 +912,6 @@ function Stat({ label, value }: { label: string; value: number | undefined }) {
       <span className="admin__stat-value">{value ?? '—'}</span>
       <span className="admin__stat-label">{label}</span>
     </li>
-  );
-}
-
-// Native modal <dialog>: focus trapping, Esc and the backdrop come for free.
-function Dialog({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
-  const ref = useRef<HTMLDialogElement>(null);
-
-  useEffect(() => {
-    const dialog = ref.current;
-    // Guarded: StrictMode runs this twice, and showModal() throws when already
-    // open. No close() in cleanup — that fires the close event (→ onClose),
-    // which would unmount the dialog right after opening; removing the element
-    // takes it out of the top layer anyway.
-    if (dialog && !dialog.open) dialog.showModal();
-  }, []);
-
-  return (
-    <dialog
-      ref={ref}
-      className="admin__dialog"
-      aria-label={title}
-      onClose={onClose}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <header className="admin__dialog-head">
-        <h2>{title}</h2>
-        <button type="button" className="admin__dialog-close" aria-label="Close" onClick={onClose}>
-          ×
-        </button>
-      </header>
-      <div className="admin__dialog-body">{children}</div>
-    </dialog>
   );
 }
 

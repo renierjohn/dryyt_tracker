@@ -45,17 +45,6 @@ export default function OwnerUsers() {
     void loadUsers();
   }, []);
 
-  async function handleDelete(u: ChildUser) {
-    if (!window.confirm(`Deactivate ${u.display_name}? They will no longer be able to sign in.`)) return;
-    setError(null);
-    try {
-      await apiFetch(`/owner/users/${u.id}`, { method: 'DELETE' });
-      await loadUsers();
-    } catch (err) {
-      setError(errorMessage(err));
-    }
-  }
-
   return (
     <>
       <details className="dashboard__section dashboard__collapsible">
@@ -73,7 +62,6 @@ export default function OwnerUsers() {
                 <th>Display name</th>
                 <th>Contact</th>
                 <th>Transactions</th>
-                <th>Active</th>
                 <th>Operations</th>
               </tr>
             </thead>
@@ -102,19 +90,10 @@ export default function OwnerUsers() {
                         </span>
                       ))}
                     </td>
-                    <td>{u.is_active ? 'yes' : 'no'}</td>
                     <td>
                       <div className="dashboard__alert-actions">
                         <button type="button" className="dashboard__button" onClick={() => setEditingId(u.id)}>
                           Edit
-                        </button>
-                        <button
-                          type="button"
-                          className="dashboard__button"
-                          onClick={() => handleDelete(u)}
-                          disabled={!u.is_active}
-                        >
-                          Delete
                         </button>
                       </div>
                     </td>
@@ -140,29 +119,18 @@ function EditUserRow({
 }) {
   const [email, setEmail] = useState(user.email);
   const [displayName, setDisplayName] = useState(user.display_name);
-  const [contactNumber, setContactNumber] = useState(user.contact_number ?? '');
-  const [isActive, setIsActive] = useState(Boolean(user.is_active));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const contactInvalid = isInvalidContact(contactNumber);
-
   async function handleSave() {
     setError(null);
-    if (contactInvalid) {
-      setError(CONTACT_ERROR);
-      return;
-    }
     setSaving(true);
     try {
       await apiFetch(`/owner/users/${user.id}`, {
         method: 'PUT',
-        body: JSON.stringify({
-          email,
-          display_name: displayName,
-          contact_number: contactNumber,
-          is_active: isActive,
-        }),
+        // Contact number is read-only here: it's how customers are matched
+        // (and shared) across stores when transactions are registered.
+        body: JSON.stringify({ email, display_name: displayName }),
       });
       await onSaved();
     } catch (err) {
@@ -180,18 +148,9 @@ function EditUserRow({
         <input aria-label="Display name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
       </td>
       <td>
-        <input
-          type="tel"
-          aria-label="Contact"
-          aria-invalid={contactInvalid}
-          value={contactNumber}
-          onChange={(e) => setContactNumber(e.target.value)}
-        />
+        <input type="tel" aria-label="Contact" value={user.contact_number ?? ''} disabled />
       </td>
       <td>{error && <span role="alert">{error}</span>}</td>
-      <td>
-        <input type="checkbox" aria-label="Active" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
-      </td>
       <td>
         <div className="dashboard__alert-actions">
           <button type="button" className="dashboard__button" onClick={handleSave} disabled={saving}>

@@ -49,7 +49,8 @@ describe("customer's own transactions", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { transactions: Array<{ code: string; customer_contact?: unknown }> };
     expect(body.transactions).toHaveLength(1);
-    expect(body.transactions[0]).toMatchObject({ code: mine.transaction.code });
+    expect(body.transactions[0]).toMatchObject({ code: mine.transaction.code, owner_name: 'Owner' });
+    expect((body.transactions[0] as { control_number?: string }).control_number).toMatch(/^\d{6}$/);
     expect(body.transactions[0].customer_contact).toBeUndefined();
     // Still can't list/manage the owner's transactions.
     expect((await json('/api/plugins/workflow/transactions', customer)).status).toBe(403);
@@ -92,6 +93,24 @@ describe("owner page for a 'user'-role customer", () => {
     expect(own).toMatchObject({ code: mine.code, customer_name: 'Cust' });
     const other = body.transactions.find((t) => t.id !== mine.id)!;
     expect(other).toMatchObject({ code: null, customer_name: null, description: null });
+  });
+
+  it('only lists in-progress and on-hold transactions, their own included', async () => {
+    const owner = await createUserWithRoleAndLogin('status-cust-owner@example.com', await getOwnerRoleId(), 'StatusCustOwner');
+    const customer = await createUserWithRoleAndLogin('status-cust@example.com', 2, 'StatusCust');
+    const customerId = (await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind('status-cust@example.com').first<{ id: number }>())!.id;
+    for (const status of ['hold', 'in_progress', 'done', 'ready_to_pickup', 'end']) {
+      const id = await createTransaction(owner);
+      await env.DB.prepare('UPDATE workflow_transactions SET status = ?, customer_user_id = ? WHERE id = ?')
+        .bind(status, customerId, id)
+        .run();
+    }
+
+    const res = await SELF.fetch('https://example.com/api/plugins/workflow/owners/StatusCustOwner/transactions', {
+      headers: { Cookie: customer },
+    });
+    const body = (await res.json()) as { transactions: Array<{ status: string }> };
+    expect(body.transactions.map((t) => t.status).sort()).toEqual(['hold', 'in_progress']);
   });
 });
 

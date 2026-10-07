@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { sanitizeHtml } from '../sanitize';
-import { createAlert, getUserById, listUsersByParent, listUsersWithRoles } from '../db';
+import { createAlert, getUserById, listOwnerCustomers, listUsersWithRoles } from '../db';
 import type { DbAlert } from '../db';
 import { requireRole } from '../middleware/auth';
 import type { AppBindings } from '../types';
@@ -21,7 +21,7 @@ adminAlertsRoutes.get('/alert-targets', async (c) => {
   const me = c.get('user')!;
   const users =
     me.role_name === 'owner'
-      ? await listUsersByParent(c.env.DB, me.id)
+      ? await listOwnerCustomers(c.env.DB, me.id)
       : await listUsersWithRoles(c.env.DB);
   return c.json({
     users: users

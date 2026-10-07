@@ -91,4 +91,28 @@ describe('public store details', () => {
   it('404s for an unknown owner', async () => {
     expect((await req('GET', '/api/owners/nobody-here/store')).status).toBe(404);
   });
+
+  it('PUT /coordinates saves or clears just lat/lng, leaving the rest alone', async () => {
+    const cookie = await createUserWithRoleAndLogin('coords-owner@example.com', await getOwnerRoleId(), 'CoordsOwner');
+    const put = (path: string, body: unknown) =>
+      SELF.fetch(`https://example.com/api/owner${path}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Cookie: cookie },
+        body: JSON.stringify(body),
+      });
+    const get = async () =>
+      ((await (await SELF.fetch('https://example.com/api/owner/store', { headers: { Cookie: cookie } })).json()) as {
+        store: { address: string | null; lat: number | null; lng: number | null };
+      }).store;
+
+    await put('/store', { address: '1 Main St', lat: null, lng: null, opening_hours: null });
+    expect((await put('/coordinates', { lat: 14.5995, lng: 120.9842 })).status).toBe(200);
+    expect(await get()).toMatchObject({ address: '1 Main St', lat: 14.5995, lng: 120.9842 });
+
+    expect((await put('/coordinates', { lat: 91, lng: 0 })).status).toBe(400);
+    expect((await put('/coordinates', { lat: 14 })).status).toBe(400);
+
+    expect((await put('/coordinates', { lat: null, lng: null })).status).toBe(200);
+    expect(await get()).toMatchObject({ address: '1 Main St', lat: null, lng: null });
+  });
 });

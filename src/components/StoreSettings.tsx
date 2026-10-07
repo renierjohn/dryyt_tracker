@@ -15,9 +15,8 @@ const MAP_DELAY_MS = 900;
 
 // Dashboard "Store" tab (owners only): address with an embedded Google map, and
 // weekly opening hours. The iframe searches the typed address itself (debounced);
-// being cross-origin it can't hand coordinates back, so editing the address
-// clears any previously saved pin rather than leaving it pointing elsewhere.
-
+// being cross-origin it can't hand coordinates back — those are set separately
+// on the Profile tab ("Your coordinates") and passed through unchanged here.
 export default function StoreSettings({ ownerName }: { ownerName: string }) {
   const [address, setAddress] = useState('');
   const [lat, setLat] = useState<number | null>(null);
@@ -51,8 +50,6 @@ export default function StoreSettings({ ownerName }: { ownerName: string }) {
 
   function handleAddressChange(value: string) {
     setAddress(value);
-    setLat(null);
-    setLng(null);
     setSaved(false);
     window.clearTimeout(timerRef.current);
     const query = value.trim();

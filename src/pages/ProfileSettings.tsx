@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { AuthUser } from '../lib/useCurrentUser';
 import { apiFetch, ApiError } from '../lib/api';
-import { canSendAlerts, isCustomer } from '../lib/permissions';
+import { canSendAlerts, isCustomer, isOwner } from '../lib/permissions';
 import AlertEditor, { type AlertFormValues } from '../components/AlertEditor';
 import '../assets/sass/dashboard.scss';
 import {
@@ -28,6 +28,7 @@ export default function ProfileSettings({ user, refresh }: { user: AuthUser; ref
     <>
       <AvatarSection user={user} refresh={refresh} />
       <ProfileForm user={user} refresh={refresh} />
+      {isOwner(user) && <CoordinatesForm />}
       <PasswordForm />
     </>
   );
@@ -178,6 +179,125 @@ function ProfileForm({ user, refresh }: { user: AuthUser; refresh: () => Promise
           )}
         </fieldset>
         <button className="dashboard__button" type="submit">Save profile</button>
+      </form>
+    </section>
+  );
+}
+
+// "lat, lng" as copied from Google Maps (right-click a spot → the first menu
+// item). Returns null for anything else.
+function parseCoordinates(value: string): { lat: number; lng: number } | null {
+  const m = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/.exec(value);
+  if (!m) return null;
+  const lat = Number(m[1]);
+  const lng = Number(m[2]);
+  return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat, lng } : null;
+}
+
+function CoordinatesForm() {
+  const [value, setValue] = useState('');
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [locating, setLocating] = useState(false);
+
+  useEffect(() => {
+    apiFetch<{ store: { lat: number | null; lng: number | null } }>('/owner/store')
+      .then(({ store }) => {
+        if (store.lat !== null && store.lng !== null) setValue(`${store.lat}, ${store.lng}`);
+      })
+      .catch((err) => setError(err instanceof ApiError ? err.code : 'unknown_error'))
+      .finally(() => setLoaded(true));
+  }, []);
+
+  const parsed = parseCoordinates(value);
+  const invalid = value.trim() !== '' && !parsed;
+
+  // Fills the field from the device's GPS (the browser asks for permission);
+  // the owner still saves it. Needs a secure context — https or localhost.
+  function handleLocate() {
+    setError(null);
+    setSaved(false);
+    if (!('geolocation' in navigator)) {
+      setError('This device or browser can’t share its location.');
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setValue(`${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`);
+        setLocating(false);
+      },
+      (err) => {
+        setError(
+          err.code === err.PERMISSION_DENIED
+            ? 'Location permission was denied. Allow it in your browser settings and try again.'
+            : err.code === err.TIMEOUT
+              ? 'Finding your location took too long. Try again.'
+              : 'Couldn’t get your location. Try again.',
+        );
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 0 },
+    );
+  }
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSaved(false);
+    if (invalid) return;
+    try {
+      await apiFetch('/owner/coordinates', {
+        method: 'PUT',
+        body: JSON.stringify({ lat: parsed?.lat ?? null, lng: parsed?.lng ?? null }),
+      });
+      setSaved(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.code : 'unknown_error');
+    }
+  }
+
+  return (
+    <section className="dashboard__section">
+      <h2>Your coordinates</h2>
+      <form className="dashboard__form" onSubmit={handleSubmit}>
+        {error && <p role="alert">{error}</p>}
+        {saved && <p className="dashboard__saved">Coordinates saved.</p>}
+        <label>
+          Latitude, longitude
+          <input
+            value={value}
+            onChange={(e) => {
+              setValue(e.target.value);
+              setSaved(false);
+            }}
+            placeholder="14.599512, 120.984222"
+            inputMode="decimal"
+            aria-invalid={invalid}
+            disabled={!loaded}
+          />
+        </label>
+        <p className="dashboard__hint" aria-live="polite">
+          {invalid
+            ? 'Enter as “latitude, longitude”, e.g. 14.599512, 120.984222.'
+            : parsed
+              ? `Latitude: ${parsed.lat} · Longitude: ${parsed.lng}`
+              : 'In Google Maps, right-click your store and click the coordinates to copy them. Leave empty to clear.'}
+        </p>
+        <div className="dashboard__form-actions">
+          <button className="dashboard__button" type="submit" disabled={!loaded || invalid || locating}>
+            Save coordinates
+          </button>
+          <button
+            className="dashboard__button dashboard__button--tonal"
+            type="button"
+            onClick={handleLocate}
+            disabled={!loaded || locating}
+          >
+            {locating ? 'Locating…' : 'Locate Me'}
+          </button>
+        </div>
       </form>
     </section>
   );

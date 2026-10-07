@@ -78,6 +78,7 @@ export async function createUser(
     )
     .first<DbUser>();
   if (!result) throw new Error('failed to create user');
+  if (params.parentId) await linkOwnerCustomer(db, params.parentId, result.id);
   return result;
 }
 
@@ -160,12 +161,73 @@ export async function getActiveOwnerByIdentifier(db: D1Database, identifier: str
   return row ?? null;
 }
 
-export async function listUsersByParent(db: D1Database, parentId: number): Promise<DbUser[]> {
+// An owner's customers: everyone linked in owner_customers, which includes
+// customers shared with other owners (parent_id is only the home owner).
+export async function listOwnerCustomers(db: D1Database, ownerId: number): Promise<DbUser[]> {
   const { results } = await db
-    .prepare('SELECT * FROM users WHERE parent_id = ? ORDER BY created_at DESC, id DESC')
-    .bind(parentId)
+    .prepare(
+      `SELECT u.* FROM users u JOIN owner_customers oc ON oc.customer_id = u.id
+       WHERE oc.owner_id = ? ORDER BY u.created_at DESC, u.id DESC`,
+    )
+    .bind(ownerId)
     .all<DbUser>();
   return results;
+}
+
+export async function isOwnerCustomer(db: D1Database, ownerId: number, customerId: number): Promise<boolean> {
+  const row = await db
+    .prepare('SELECT 1 FROM owner_customers WHERE owner_id = ? AND customer_id = ?')
+    .bind(ownerId, customerId)
+    .first();
+  return row !== null;
+}
+
+// Links a customer to an owner (no-op if already linked); a customer with no
+// home owner yet gets this one as parent_id.
+export async function linkOwnerCustomer(db: D1Database, ownerId: number, customerId: number): Promise<void> {
+  await db.batch([
+    db.prepare('INSERT OR IGNORE INTO owner_customers (owner_id, customer_id) VALUES (?, ?)').bind(ownerId, customerId),
+    db.prepare('UPDATE users SET parent_id = ? WHERE id = ? AND parent_id IS NULL').bind(ownerId, customerId),
+  ]);
+}
+
+// Removes one owner's link, but only while the customer has another owner;
+// returns false (and keeps the link) when this owner is the last one. If the
+// removed owner was the home owner, the earliest remaining one takes over.
+export async function unlinkSharedCustomer(db: D1Database, ownerId: number, customerId: number): Promise<boolean> {
+  const others = await db
+    .prepare('SELECT COUNT(*) AS n FROM owner_customers WHERE customer_id = ? AND owner_id != ?')
+    .bind(customerId, ownerId)
+    .first<{ n: number }>();
+  if (!others?.n) return false;
+  await db.batch([
+    db.prepare('DELETE FROM owner_customers WHERE owner_id = ? AND customer_id = ?').bind(ownerId, customerId),
+    db
+      .prepare(
+        `UPDATE users SET parent_id = (
+           SELECT owner_id FROM owner_customers WHERE customer_id = ?1 ORDER BY created_at, owner_id LIMIT 1
+         ) WHERE id = ?1 AND parent_id = ?2`,
+      )
+      .bind(customerId, ownerId),
+  ]);
+  return true;
+}
+
+// The active 'user'-role account with this contact number (compared by digits
+// only, so "0917 111-2222" = "09171112222"), under any owner or none —
+// preferring one already linked to ownerId.
+export async function findCustomerByContact(db: D1Database, contactDigits: string, ownerId: number): Promise<DbUser | null> {
+  const row = await db
+    .prepare(
+      `SELECT u.* FROM users u JOIN roles r ON r.id = u.role_id
+       WHERE r.name = 'user' AND u.is_active = 1
+         AND REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(u.contact_number, ' ', ''), '-', ''), '(', ''), ')', ''), '.', ''), '+', '') = ?1
+       ORDER BY EXISTS (SELECT 1 FROM owner_customers oc WHERE oc.owner_id = ?2 AND oc.customer_id = u.id) DESC, u.id
+       LIMIT 1`,
+    )
+    .bind(contactDigits, ownerId)
+    .first<DbUser>();
+  return row ?? null;
 }
 
 export async function createSession(
@@ -254,6 +316,55 @@ export async function deleteSession(db: D1Database, token: string): Promise<void
 
 export async function deleteSessionsForUser(db: D1Database, userId: number): Promise<void> {
   await db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId).run();
+}
+
+export interface AdminSessionRow {
+  id: number;
+  user_id: number;
+  user_name: string;
+  user_email: string;
+  role_name: string;
+  impersonator_name: string | null;
+  created_at: string;
+  expires_at: string;
+}
+
+// Sessions for the superadmin's Sessions tab, newest first, capped per group.
+// The token is never selected — it's the bearer credential; rowid stands in as
+// a display id. expires_at is ISO; datetime() normalizes it to SQLite's format.
+export async function listSessions(
+  db: D1Database,
+  limit: number,
+): Promise<{ active: AdminSessionRow[]; expired: AdminSessionRow[]; activeTotal: number; expiredTotal: number }> {
+  const select = (expired: boolean) =>
+    db
+      .prepare(
+        `SELECT s.rowid AS id, s.user_id, u.display_name AS user_name, u.email AS user_email, r.name AS role_name,
+                i.display_name AS impersonator_name, s.created_at, datetime(s.expires_at) AS expires_at
+         FROM sessions s
+         JOIN users u ON u.id = s.user_id
+         JOIN roles r ON r.id = u.role_id
+         LEFT JOIN users i ON i.id = s.impersonator_id
+         WHERE datetime(s.expires_at) ${expired ? '<=' : '>'} datetime('now')
+         ORDER BY s.created_at DESC, s.rowid DESC LIMIT ?`,
+      )
+      .bind(limit);
+  const count = (expired: boolean) =>
+    db.prepare(
+      `SELECT COUNT(*) AS n FROM sessions WHERE datetime(expires_at) ${expired ? '<=' : '>'} datetime('now')`,
+    );
+  const [active, expired, activeTotal, expiredTotal] = await db.batch([select(false), select(true), count(false), count(true)]);
+  return {
+    active: active.results as AdminSessionRow[],
+    expired: expired.results as AdminSessionRow[],
+    activeTotal: (activeTotal.results[0] as { n: number }).n,
+    expiredTotal: (expiredTotal.results[0] as { n: number }).n,
+  };
+}
+
+export async function deleteExpiredSessions(db: D1Database): Promise<number> {
+  const result = await db.prepare("DELETE FROM sessions WHERE datetime(expires_at) <= datetime('now')").run();
+  return result.meta.changes;
 }
 
 export async function deleteAllPasswordResetsForUser(db: D1Database, userId: number): Promise<void> {
@@ -365,6 +476,10 @@ export async function updateStoreDetails(
     .prepare('UPDATE users SET address = ?, lat = ?, lng = ?, opening_hours = ? WHERE id = ?')
     .bind(params.address, params.lat, params.lng, params.openingHours, userId)
     .run();
+}
+
+export async function updateCoordinates(db: D1Database, userId: number, lat: number | null, lng: number | null): Promise<void> {
+  await db.prepare('UPDATE users SET lat = ?, lng = ? WHERE id = ?').bind(lat, lng, userId).run();
 }
 
 export async function setUserAvatarKey(db: D1Database, userId: number, avatarKey: string | null): Promise<void> {

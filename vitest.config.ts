@@ -12,8 +12,10 @@ export default defineConfig(async () => {
         miniflare: {
           // wrangler.jsonc's top-level DEV_MODE is "false" (the production-safe
           // default). Tests need the forgot-password dev-mode behavior, so
-          // override it here rather than in the committed config.
-          bindings: { TEST_MIGRATIONS: migrations, DEV_MODE: 'true' },
+          // override it here rather than in the committed config. Turnstile's
+          // secret is blanked (it would otherwise come from .dev.vars) so auth
+          // requests skip siteverify, as DEV_MODE allows.
+          bindings: { TEST_MIGRATIONS: migrations, DEV_MODE: 'true', TURNSTILE_SECRET_KEY: '' },
         },
       }),
     ],
