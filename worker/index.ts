@@ -40,3 +40,6 @@ app.onError((err, c) => {
 });
 
 export default app;
+
+// Durable Object classes must be exported from the Worker's entry module.
+export { TrackRoom } from '../plugins/workflow/backend/TrackRoom';

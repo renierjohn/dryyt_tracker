@@ -12,6 +12,8 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8788',
         changeOrigin: true,
+        // /track's live status WebSocket (/api/plugins/workflow/track/:code/ws).
+        ws: true,
       },
     },
   },

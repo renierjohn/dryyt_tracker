@@ -1,6 +1,10 @@
+import type { TrackRoom } from '../plugins/workflow/backend/TrackRoom';
+
 export interface Env {
   DB: D1Database;
   AVATARS: R2Bucket;
+  // Live /track?code= status updates — one Durable Object per transaction code.
+  TRACK_ROOMS: DurableObjectNamespace<TrackRoom>;
   DEV_MODE?: 'true' | 'false';
   TURNSTILE_SECRET_KEY?: string;
   // Comma-separated origins allowed to call /api/* cross-origin (see middleware/cors).

@@ -17,6 +17,22 @@
 			"bucket_name": "dryyt-tracker-avatars"
 		}
 	],
+	"durable_objects": {
+		// Live /track?code= updates (plugins/workflow/backend/TrackRoom.ts).
+		// Not inherited by the envs below — each repeats it.
+		"bindings": [
+			{
+				"name": "TRACK_ROOMS",
+				"class_name": "TrackRoom"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": ["TrackRoom"]
+		}
+	],
 	"vars": {
 		"DEV_MODE": "false",
 		// Origins allowed to call /api/* cross-origin (comma-separated) — the
@@ -55,6 +71,14 @@
 					"bucket_name": "dryyt-tracker-staging-avatars"
 				}
 			],
+			"durable_objects": {
+				"bindings": [
+					{
+						"name": "TRACK_ROOMS",
+						"class_name": "TrackRoom"
+					}
+				]
+			},
 			"vars": {
 				"DEV_MODE": "false",
 				"CORS_ORIGINS": "https://app-demo.dryyt.com"
@@ -82,6 +106,14 @@
 					"bucket_name": "dryyt-tracker-avatars"
 				}
 			],
+			"durable_objects": {
+				"bindings": [
+					{
+						"name": "TRACK_ROOMS",
+						"class_name": "TrackRoom"
+					}
+				]
+			},
 			"vars": {
 				"DEV_MODE": "false",
 				"CORS_ORIGINS": "https://app.dryyt.com"

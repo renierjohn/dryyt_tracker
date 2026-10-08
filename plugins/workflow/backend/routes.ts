@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { requireAuth, requirePermission, requireRole } from '../../../worker/middleware/auth';
 import {
   createUser,
@@ -16,6 +16,7 @@ import type { AppBindings } from '../../../worker/types';
 import { sanitizeHtml } from '../../../worker/sanitize';
 import { generateToken, hashPassword } from '../../../worker/crypto';
 import { generateCode, isValidCode } from './code';
+import type { TrackUpdate } from './TrackRoom';
 
 // description is rich text (CKEditor HTML), sanitized on write. Rows written
 // before that were plain text, stored unsanitized — so every read sanitizes
@@ -56,6 +57,26 @@ workflowRoutes.get('/track/:code', async (c) => {
   if (!row) return c.json({ error: 'not_found' }, 404);
   return c.json({ transaction: await withSafeDescription(row) });
 });
+
+// Public WebSocket for the /track?code= page: pushes { status, updated_at }
+// whenever the transaction's status changes (see notifyTrack). Same access
+// rule as the lookup above — knowing the code is enough.
+workflowRoutes.get('/track/:code/ws', async (c) => {
+  if (c.req.header('Upgrade') !== 'websocket') return c.json({ error: 'expected_websocket' }, 426);
+  const code = c.req.param('code').toUpperCase();
+  const exists = await c.env.DB.prepare('SELECT 1 FROM workflow_transactions WHERE code = ?').bind(code).first();
+  if (!exists) return c.json({ error: 'not_found' }, 404);
+  return c.env.TRACK_ROOMS.getByName(code).fetch(c.req.raw);
+});
+
+// Tells any open /track pages for this code about a status change. Runs after
+// the response; a failed push only means those pages miss one live update.
+function notifyTrack(c: Context<AppBindings>, row: WorkflowTransaction) {
+  const update: TrackUpdate = { status: row.status, updated_at: row.updated_at };
+  c.executionCtx.waitUntil(
+    c.env.TRACK_ROOMS.getByName(row.code).broadcast(update).catch((err) => console.error('track broadcast failed', err)),
+  );
+}
 
 // Public: the read-only view reached from an owner's card on the homepage
 // (see src/components/OwnersList.tsx → /owner/:identifier, aliased from
@@ -541,6 +562,7 @@ workflowRoutes.put('/transactions/:id/status', requirePermission('manage_users')
     .bind(status, id, user.id)
     .first<WorkflowTransaction>();
   if (!row) return c.json({ error: 'not_found' }, 404);
+  notifyTrack(c, row);
   return c.json({ transaction: row });
 });
 
@@ -562,7 +584,10 @@ workflowRoutes.post('/pickup', requirePermission('manage_users'), async (c) => {
     )
     .bind(code, user.id)
     .first<WorkflowTransaction>();
-  if (row) return c.json({ transaction: row });
+  if (row) {
+    notifyTrack(c, row);
+    return c.json({ transaction: row });
+  }
 
   const existing = await c.env.DB
     .prepare('SELECT status FROM workflow_transactions WHERE code = ? AND created_by = ?')

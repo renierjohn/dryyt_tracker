@@ -678,3 +678,29 @@ describe('customers shared between owners', () => {
     expect((await customerIds(b)).find((u) => u.id === customerId)?.is_active).toBe(0);
   });
 });
+
+describe('GET /api/plugins/workflow/track/:code/ws', () => {
+  it('pushes status changes to an open /track socket', async () => {
+    const ownerCookie = await createUserWithRoleAndLogin('workflow-track-ws@example.com', await getOwnerRoleId(), 'Owner');
+    const createRes = await req('POST', '/api/plugins/workflow/transactions', { customer_name: 'Live Track' }, ownerCookie);
+    const { transaction } = (await createRes.json()) as { transaction: { id: number; code: string } };
+
+    const res = await SELF.fetch(`https://example.com/api/plugins/workflow/track/${transaction.code.toLowerCase()}/ws`, {
+      headers: { Upgrade: 'websocket' },
+    });
+    expect(res.status).toBe(101);
+    const ws = res.webSocket!;
+    ws.accept();
+    const message = new Promise<unknown>((resolve) => ws.addEventListener('message', (e) => resolve(JSON.parse(e.data as string))));
+
+    await req('PUT', `/api/plugins/workflow/transactions/${transaction.id}/status`, { status: 'in_progress' }, ownerCookie);
+    expect(await message).toMatchObject({ status: 'in_progress', updated_at: expect.any(String) });
+    ws.close();
+  });
+
+  it('rejects unknown codes and non-upgrade requests', async () => {
+    const ws = await SELF.fetch('https://example.com/api/plugins/workflow/track/ZZZZZZ/ws', { headers: { Upgrade: 'websocket' } });
+    expect(ws.status).toBe(404);
+    expect((await SELF.fetch('https://example.com/api/plugins/workflow/track/ZZZZZZ/ws')).status).toBe(426);
+  });
+});

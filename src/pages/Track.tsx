@@ -73,6 +73,53 @@ export default function Track() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Live status: the Worker's TrackRoom Durable Object pushes { status,
+  // updated_at } over a WebSocket whenever the owner changes it. Reconnects
+  // with backoff; after a drop it re-fetches once, in case an update was missed.
+  // 'end' is final, so an ended order has no socket — and one that ends while
+  // the page is open drops its socket (liveCode goes undefined → cleanup).
+  const liveCode = transaction && transaction.status !== 'end' ? transaction.code : undefined;
+  useEffect(() => {
+    if (!liveCode) return;
+    let ws: WebSocket | null = null;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    let attempt = 0;
+    let closed = false;
+
+    function connect() {
+      const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      ws = new WebSocket(`${scheme}://${window.location.host}/api/plugins/workflow/track/${encodeURIComponent(liveCode!)}/ws`);
+      ws.onopen = () => {
+        if (attempt > 0) void resync();
+        attempt = 0;
+      };
+      ws.onmessage = (e) => {
+        const update = JSON.parse(e.data as string) as Pick<TrackedTransaction, 'status' | 'updated_at'>;
+        setTransaction((t) => (t && t.code === liveCode ? { ...t, ...update } : t));
+      };
+      ws.onclose = () => {
+        if (closed) return;
+        retry = setTimeout(connect, Math.min(30_000, 1000 * 2 ** attempt++));
+      };
+    }
+
+    async function resync() {
+      try {
+        const body = await apiFetch<{ transaction: TrackedTransaction }>(`/plugins/workflow/track/${encodeURIComponent(liveCode!)}`);
+        setTransaction((t) => (t && t.code === liveCode ? body.transaction : t));
+      } catch (err) {
+        console.error('Track resync failed', err);
+      }
+    }
+
+    connect();
+    return () => {
+      closed = true;
+      clearTimeout(retry);
+      ws?.close();
+    };
+  }, [liveCode]);
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     const trimmed = normalizeCode(code);
