@@ -60,9 +60,16 @@ export default function Home({ user, refresh }: { user: AuthUser | null; refresh
 
       <footer className="home__footer">
         <p>Copyright 2026</p>
-        <p>
-          Created by <a href="mailto:renify.official@gmail.com">renify.official@gmail.com</a>
-        </p>
+        {/* Static pages (public/), so plain links rather than router <Link>s. */}
+        <nav className="home__footer-links" aria-label="Legal">
+          <a href="/privacy">Privacy Policy</a>
+          <span aria-hidden="true">·</span>
+          <a href="/terms">Terms &amp; Conditions</a>
+          <span aria-hidden="true">·</span>
+          <span>
+            Created by <a href="mailto:renify.official@gmail.com">renify.official@gmail.com</a>
+          </span>
+        </nav>
       </footer>
     </AppShell>
   );

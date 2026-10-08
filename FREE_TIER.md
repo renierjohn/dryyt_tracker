@@ -29,6 +29,29 @@ to break is **D1 rows read**. That limit depends on how much history each owner
 has, not only on how much traffic there is. Two missing indexes make it much
 worse (see §2 and the recommendations at the end).
 
+## Your expected load: 30 customers/day, 2 owners
+
+Assumes each customer is one order (≈ 15 orders/day per owner), the daily cron
+keeps 3 months of ended orders (≈ 1,350 per owner), the new indexes are
+applied, and each owner reloads the Tracker ~20 times a day.
+
+| Service | Estimated use per day | Free limit | Used |
+|---|---|---|---|
+| Workers requests | ~1,500 (30 orders × ~30, plus owner reloads and logins) | 100,000 | **~1.5%** |
+| D1 rows read | ~400,000 (status counts, next control number and customer list still read each owner's ~1,350 index entries) | 5,000,000 | **~8%** |
+| D1 rows written | ~500 | 100,000 | **~0.5%** |
+| Durable Object requests | ~210 (30 orders × ~7) | 100,000 | **~0.2%** |
+| D1 storage | ~5 MB steady state (~2,700 kept orders) | 500 MB | **~1%** |
+| R2 storage | ≤ 160 MB even if all ~32 users upload a 5 MB avatar | 10 GB | **≤ 1.6%** |
+
+**Verdict:** comfortably within the free tier. The first limit is still D1 rows
+read, and it grows with the **square** of volume (more orders/day × more kept
+history). It runs out at roughly **100 orders/day across the 2 owners**, about
+3× your expected load. Workers requests would last until ~3,000 orders/day.
+
+The only thing to watch at this size is the per-request 10 ms CPU limit on
+login/register (§6). It doesn't depend on volume.
+
 ## How one transaction uses resources
 
 These are the requests a transaction makes from registration through pickup,

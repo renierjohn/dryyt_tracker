@@ -48,6 +48,11 @@ export default function Register({ onRegistered }: { onRegistered: () => Promise
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
         </label>
         <div ref={turnstileRef} className="auth-form__turnstile" />
+        {/* Static pages (public/), so plain links rather than router <Link>s. */}
+        <p className="auth-form__legal">
+          By registering you agree to the <a href="/terms" target="_blank" rel="noopener">Terms &amp; Conditions</a> and
+          the <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.
+        </p>
         <button className="auth-form__button" type="submit">Register</button>
       </form>
     </AppShell>
