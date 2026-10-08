@@ -4,6 +4,7 @@ import {
   ApiError,
   useSession,
   AppShell,
+  Autocomplete,
   Icon,
   RichText,
   RichTextEditor,
@@ -545,19 +546,15 @@ function RegisterTransactionForm({ onCreated }: { onCreated: (code: string) => P
       <form ref={formRef} className="m3-form" onSubmit={handleSubmit}>
         {error && <p role="alert" className="m3-banner m3-banner--error">{error}</p>}
         <label className="workflow-form-full">
-          Customer name
-          <input
+          <span>
+            Customer name <span className="m3-required" aria-hidden="true">*</span>
+          </span>
+          <Autocomplete
             value={customerName}
-            onChange={(e) => handleCustomerNameChange(e.target.value)}
-            list="workflow-customers"
-            autoComplete="off"
+            onChange={handleCustomerNameChange}
+            options={customers.map((c) => ({ id: c.id, value: customerLabel(c), label: c.display_name, detail: c.contact_number }))}
             required
           />
-          <datalist id="workflow-customers">
-            {customers.map((c) => (
-              <option key={c.id} value={customerLabel(c)} />
-            ))}
-          </datalist>
         </label>
         <div className="workflow-form-row">
           <label>

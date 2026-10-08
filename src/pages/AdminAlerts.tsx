@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { AuthUser } from '../lib/useCurrentUser';
 import { apiFetch, ApiError } from '../lib/api';
 import AppShell from '../components/AppShell';
+import Autocomplete from '../components/Autocomplete';
 import AlertEditor, { type AlertFormValues } from '../components/AlertEditor';
 
 interface AlertTarget {
@@ -50,19 +51,13 @@ export default function AdminAlerts({ user, refresh }: { user: AuthUser; refresh
           <h2 className="m3-card__title">Recipient</h2>
           <label className="m3-field">
             Target User
-            <input
+            <Autocomplete
               value={targetText}
-              onChange={(e) => { setTargetText(e.target.value); setSent(false); }}
-              list="alert-targets"
-              autoComplete="off"
+              onChange={(value) => { setTargetText(value); setSent(false); }}
+              options={targets.map((t) => ({ id: t.id, value: targetLabel(t), label: t.display_name, detail: t.email }))}
               placeholder="Name or email"
               required
             />
-            <datalist id="alert-targets">
-              {targets.map((t) => (
-                <option key={t.id} value={targetLabel(t)} />
-              ))}
-            </datalist>
           </label>
         </div>
         <div className="m3-card">

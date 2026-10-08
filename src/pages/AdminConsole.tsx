@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'rea
 import { apiFetch, ApiError } from '../lib/api';
 import AlertEditor, { type AlertFormValues } from '../components/AlertEditor';
 import AppShell from '../components/AppShell';
+import Autocomplete from '../components/Autocomplete';
 import Dialog from '../components/Dialog';
 import RichText from '../components/RichText';
 import type { AuthUser } from '../lib/useCurrentUser';
@@ -709,19 +710,13 @@ function AllAlertsPanel() {
         <summary className="m3-card__title">New alert</summary>
         <label className="m3-field">
           Target User
-          <input
+          <Autocomplete
             value={targetText}
-            onChange={(e) => setTargetText(e.target.value)}
-            list="admin-alert-targets"
-            autoComplete="off"
+            onChange={setTargetText}
+            options={targets.map((t) => ({ id: t.id, value: alertTargetLabel(t), label: t.display_name, detail: t.email }))}
             placeholder="Name or email"
             required
           />
-          <datalist id="admin-alert-targets">
-            {targets.map((t) => (
-              <option key={t.id} value={alertTargetLabel(t)} />
-            ))}
-          </datalist>
         </label>
         <AlertEditor submitLabel="Create alert" onSubmit={handleCreate} />
       </details>

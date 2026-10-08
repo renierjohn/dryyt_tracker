@@ -1,0 +1,73 @@
+// Suggestion dropdown for <Autocomplete>, styled as an M3 menu.
+.autocomplete {
+  position: relative;
+  display: block;
+}
+
+.autocomplete__list {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  z-index: 50;
+  max-height: 320px;
+  margin: 0;
+  padding: 8px 0;
+  overflow-y: auto;
+  list-style: none;
+  background: var(--m3-surface-container, #f3f3f3);
+  border-radius: 4px;
+  box-shadow:
+    0 2px 6px 2px rgba(0, 0, 0, 0.15),
+    0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.autocomplete__option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 16px;
+  cursor: pointer;
+
+  &--active {
+    background: color-mix(in srgb, var(--m3-on-surface, #1f1f1f) 8%, transparent);
+  }
+}
+
+.autocomplete__avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  font: 500 13px var(--m3-font, inherit);
+  color: var(--m3-on-primary, #fff);
+  background: var(--m3-primary, #6750a4);
+  border-radius: 50%;
+}
+
+.autocomplete__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.autocomplete__label,
+.autocomplete__detail {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.autocomplete__label {
+  font: 400 15px/20px var(--m3-font, inherit);
+  color: var(--m3-on-surface, inherit);
+}
+
+.autocomplete__detail {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--m3-on-surface-variant, inherit);
+}

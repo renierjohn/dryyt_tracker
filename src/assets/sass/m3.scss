@@ -336,6 +336,12 @@
     color: var(--m3-on-surface-variant);
   }
 
+  // Required-field marker after a label; the input's `required` is what
+  // assistive tech announces, so this stays aria-hidden.
+  .m3-required {
+    color: #b3261e;
+  }
+
   .m3-field input,
   .m3-field select,
   .m3-form input,
