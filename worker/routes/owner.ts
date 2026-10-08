@@ -6,7 +6,7 @@ import {
   getUserById,
   getRoleByName,
   isOwnerCustomer,
-  listOwnerCustomers,
+  pageOwnerCustomers,
   setUserActive,
   unlinkSharedCustomer,
   updateCoordinates,
@@ -15,6 +15,7 @@ import {
 } from '../db';
 import { parseOpeningHours, validateStoreDetails } from '../store';
 import { requireRole } from '../middleware/auth';
+import { parsePage, PAGE_SIZE } from '../pagination';
 import { hashPassword } from '../crypto';
 import { isValidContactNumber, isValidEmail } from '../util';
 import type { AppBindings } from '../types';
@@ -26,10 +27,15 @@ export const ownerRoutes = new Hono<AppBindings>();
 
 ownerRoutes.use('*', requireRole('owner'));
 
+// Paginated: ?page=.
 ownerRoutes.get('/users', async (c) => {
   const owner = c.get('user')!;
-  const users = await listOwnerCustomers(c.env.DB, owner.id);
+  const { page, limit, offset } = parsePage(c.req.query('page'));
+  const { users, total } = await pageOwnerCustomers(c.env.DB, owner.id, { limit, offset });
   return c.json({
+    page,
+    page_size: PAGE_SIZE,
+    total,
     users: users.map((u) => ({
       id: u.id,
       email: u.email,

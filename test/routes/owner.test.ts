@@ -78,6 +78,21 @@ describe('GET /api/owner/users', () => {
     expect(emails).toContain('a-child@example.com');
     expect(emails).not.toContain('b-child@example.com');
   });
+
+  it('paginates 10 per page with total', async () => {
+    const ownerCookie = await createUserWithRoleAndLogin('owner-paged@example.com', await getOwnerRoleId(), 'Paged');
+    for (let i = 0; i < 12; i++) {
+      await req('POST', '/api/owner/users', { email: `paged-${i}@example.com`, password: 'password123', display_name: `P${i}` }, ownerCookie);
+    }
+    type Page = { page: number; page_size: number; total: number; users: Array<{ email: string }> };
+    const first = (await (await req('GET', '/api/owner/users', undefined, ownerCookie)).json()) as Page;
+    expect(first).toMatchObject({ page: 1, page_size: 10, total: 12 });
+    expect(first.users).toHaveLength(10);
+    const second = (await (await req('GET', '/api/owner/users?page=2', undefined, ownerCookie)).json()) as Page;
+    expect(second).toMatchObject({ page: 2, total: 12 });
+    expect(second.users).toHaveLength(2);
+    expect(second.users.map((u) => u.email)).not.toContain(first.users[0].email);
+  });
 });
 
 describe('PUT/DELETE /api/owner/users/:id', () => {

@@ -174,6 +174,23 @@ export async function listOwnerCustomers(db: D1Database, ownerId: number): Promi
   return results;
 }
 
+// One page of listOwnerCustomers, plus the owner's total customer count.
+export async function pageOwnerCustomers(
+  db: D1Database,
+  ownerId: number,
+  params: { limit: number; offset: number },
+): Promise<{ users: DbUser[]; total: number }> {
+  const from = 'FROM users u JOIN owner_customers oc ON oc.customer_id = u.id WHERE oc.owner_id = ?';
+  const [page, count] = await db.batch([
+    db.prepare(`SELECT u.* ${from} ORDER BY u.created_at DESC, u.id DESC LIMIT ? OFFSET ?`).bind(ownerId, params.limit, params.offset),
+    db.prepare(`SELECT COUNT(*) AS n ${from}`).bind(ownerId),
+  ]);
+  return {
+    users: page.results as DbUser[],
+    total: (count.results[0] as { n: number }).n,
+  };
+}
+
 export async function isOwnerCustomer(db: D1Database, ownerId: number, customerId: number): Promise<boolean> {
   const row = await db
     .prepare('SELECT 1 FROM owner_customers WHERE owner_id = ? AND customer_id = ?')

@@ -215,6 +215,26 @@
     margin-bottom: 8px;
   }
 
+  &__pagination {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 12px;
+    font-size: 13px;
+  }
+
+  &__pagination-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__pagination-page {
+    font-variant-numeric: tabular-nums;
+  }
+
   &__alert-actions {
     display: flex;
     gap: 8px;

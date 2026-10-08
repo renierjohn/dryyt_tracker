@@ -24,11 +24,26 @@ export default function OwnerUsers() {
   const [codes, setCodes] = useState<Map<number, string[]>>(new Map());
   const [editingId, setEditingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
 
-  async function loadUsers() {
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+
+  async function loadUsers(target = page) {
     try {
-      const body = await apiFetch<{ users: ChildUser[] }>('/owner/users');
+      const body = await apiFetch<{ users: ChildUser[]; total: number; page_size: number }>(
+        `/owner/users?page=${target}`,
+      );
+      // A page left empty (e.g. after the last row on it was removed) steps
+      // back to the last page that has rows.
+      const lastPage = Math.max(1, Math.ceil(body.total / body.page_size));
+      if (target > lastPage) return loadUsers(lastPage);
+      setPage(target);
       setUsers(body.users);
+      setTotal(body.total);
+      setPageSize(body.page_size);
+      setError(null);
     } catch (err) {
       setError(errorMessage(err));
     }
@@ -41,15 +56,15 @@ export default function OwnerUsers() {
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadUsers();
+    void loadUsers(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <>
       <details className="dashboard__section dashboard__collapsible">
         <summary>Create user</summary>
-        <CreateChildUserForm onCreated={loadUsers} />
+        <CreateChildUserForm onCreated={() => loadUsers()} />
       </details>
       <section className="dashboard__section">
         <h2>Your customers</h2>
@@ -103,6 +118,36 @@ export default function OwnerUsers() {
             </tbody>
           </table>
         </div>
+        {total > 0 && (
+          <nav className="dashboard__pagination" aria-label="Customers pages">
+            <span>
+              {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} of {total}
+            </span>
+            {pageCount > 1 && (
+              <span className="dashboard__pagination-controls">
+                <button
+                  type="button"
+                  className="dashboard__button"
+                  onClick={() => void loadUsers(page - 1)}
+                  disabled={page === 1}
+                >
+                  ‹ Prev
+                </button>
+                <span className="dashboard__pagination-page" aria-current="page">
+                  Page {page} of {pageCount}
+                </span>
+                <button
+                  type="button"
+                  className="dashboard__button"
+                  onClick={() => void loadUsers(page + 1)}
+                  disabled={page === pageCount}
+                >
+                  Next ›
+                </button>
+              </span>
+            )}
+          </nav>
+        )}
       </section>
     </>
   );
