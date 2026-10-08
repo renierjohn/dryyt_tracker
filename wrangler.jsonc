@@ -27,6 +27,10 @@
 			}
 		]
 	},
+	// Daily housekeeping at 03:00 UTC — see scheduled() in worker/index.ts.
+	"triggers": {
+		"crons": ["0 3 * * *"]
+	},
 	"migrations": [
 		{
 			"tag": "v1",

@@ -452,8 +452,8 @@ function TransactionsPanel() {
   const [purgeError, setPurgeError] = useState<string | null>(null);
   const [purgeNotice, setPurgeNotice] = useState<string | null>(null);
   const [purgeConfirm, setPurgeConfirm] = useState<PurgeResult | null>(null);
-  // How many transactions are past the 3-month mark (a dry-run count), shown
-  // as a warning until they're deleted.
+  // How many ended transactions are past the 3-month mark (a dry-run count),
+  // shown as a warning until they're deleted (by "Delete" or the daily cron).
   const [stale, setStale] = useState<PurgeResult | null>(null);
   const [staleTick, setStaleTick] = useState(0);
 
@@ -479,8 +479,8 @@ function TransactionsPanel() {
   });
   const transactions = list.body?.transactions ?? [];
 
-  // Counts transactions created over 3 months ago, then asks to confirm
-  // deleting them.
+  // Counts ended transactions created over 3 months ago, then asks to
+  // confirm deleting them.
   async function handlePurge() {
     setPurgeError(null);
     setPurgeNotice(null);
@@ -488,7 +488,7 @@ function TransactionsPanel() {
     try {
       const preview = await apiFetch<PurgeResult>(PURGE_PATH, { method: 'POST', body: JSON.stringify({ dry_run: true }) });
       if (preview.transactions === 0) {
-        setPurgeNotice('No transactions are older than 3 months.');
+        setPurgeNotice('No ended transactions are older than 3 months.');
         return;
       }
       setPurgeConfirm(preview);
@@ -522,7 +522,7 @@ function TransactionsPanel() {
       {purgeNotice && <p className="m3-banner" role="status">{purgeNotice}</p>}
       {stale && stale.transactions > 0 && (
         <p className="m3-banner m3-banner--warning" role="alert">
-          {stale.transactions} transaction(s) are more than 3 months old — created before{' '}
+          {stale.transactions} ended transaction(s) are more than 3 months old — created before{' '}
           {formatDateTime(stale.cutoff)}. Use “Delete” to remove them.
         </p>
       )}
@@ -620,9 +620,9 @@ function TransactionsPanel() {
       </div>
       {openId !== null && <TransactionDetailsDialog id={openId} onClose={() => setOpenId(null)} />}
       {purgeConfirm && (
-        <Dialog title="Delete old transactions?" onClose={() => setPurgeConfirm(null)}>
+        <Dialog title="Delete old ended transactions?" onClose={() => setPurgeConfirm(null)}>
           <p>
-            Permanently delete {purgeConfirm.transactions} transaction(s) created before{' '}
+            Permanently delete {purgeConfirm.transactions} ended transaction(s) created before{' '}
             {formatDateTime(purgeConfirm.cutoff)}? This can’t be undone.
           </p>
           <div className="admin__dialog-actions">

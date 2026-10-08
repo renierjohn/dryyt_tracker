@@ -11,7 +11,9 @@ import { adminAlertsRoutes } from './routes/admin-alerts';
 import { ownerRoutes } from './routes/owner';
 import { publicRoutes } from './routes/public';
 import { pluginRouters } from './plugins';
-import type { AppBindings } from './types';
+import { deleteExpiredSessions } from './db';
+import { purgeOldEndedTransactions } from '../plugins/workflow/backend/purge';
+import type { AppBindings, Env } from './types';
 
 const app = new Hono<AppBindings>();
 
@@ -39,7 +41,15 @@ app.onError((err, c) => {
   return c.json({ error: 'internal_error' }, 500);
 });
 
-export default app;
+export default {
+  fetch: app.fetch,
+  // Daily cron (wrangler.jsonc "triggers"): housekeeping that used to need a
+  // superadmin — expired sessions, and ended transactions past 3 months.
+  async scheduled(_controller, env) {
+    const [sessions, purged] = await Promise.all([deleteExpiredSessions(env.DB), purgeOldEndedTransactions(env.DB)]);
+    console.log(`cron: deleted ${sessions} expired session(s), ${purged.transactions} old ended transaction(s)`);
+  },
+} satisfies ExportedHandler<Env>;
 
 // Durable Object classes must be exported from the Worker's entry module.
 export { TrackRoom } from '../plugins/workflow/backend/TrackRoom';

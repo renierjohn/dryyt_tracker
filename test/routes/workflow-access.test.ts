@@ -1,6 +1,7 @@
-import { SELF, env } from 'cloudflare:test';
+import { SELF, env, createScheduledController } from 'cloudflare:test';
 import { describe, it, expect } from 'vitest';
 import { createUserWithRoleAndLogin, getOwnerRoleId } from '../helpers';
+import worker from '../../worker/index';
 
 async function createTransaction(cookie: string): Promise<number> {
   const res = await SELF.fetch('https://example.com/api/plugins/workflow/transactions', {
@@ -140,11 +141,13 @@ describe('owner page viewed by another owner', () => {
 });
 
 describe('POST /api/plugins/workflow/admin/transactions/purge-old', () => {
-  it('deletes transactions over 3 months old, keeping newer ones', async () => {
+  it('deletes ended transactions over 3 months old, keeping newer and still-open ones', async () => {
     const owner = await createUserWithRoleAndLogin('purge-owner@example.com', await getOwnerRoleId(), 'PurgeOwner');
     const oldId = await createTransaction(owner);
+    const oldOpenId = await createTransaction(owner);
     const newId = await createTransaction(owner);
-    await env.DB.prepare("UPDATE workflow_transactions SET created_at = datetime('now', '-4 months') WHERE id = ?").bind(oldId).run();
+    await env.DB.prepare("UPDATE workflow_transactions SET created_at = datetime('now', '-4 months') WHERE id IN (?, ?)").bind(oldId, oldOpenId).run();
+    await env.DB.prepare("UPDATE workflow_transactions SET status = 'end' WHERE id IN (?, ?)").bind(oldId, newId).run();
 
     const superCookie = await createUserWithRoleAndLogin('purge-super@example.com', 1, 'Super');
     const purge = (body: unknown, cookie = superCookie) =>
@@ -165,5 +168,41 @@ describe('POST /api/plugins/workflow/admin/transactions/purge-old', () => {
     expect(res.status).toBe(200);
     expect(await env.DB.prepare('SELECT id FROM workflow_transactions WHERE id = ?').bind(oldId).first()).toBeNull();
     expect(await env.DB.prepare('SELECT id FROM workflow_transactions WHERE id = ?').bind(newId).first()).not.toBeNull();
+    expect(await env.DB.prepare('SELECT id FROM workflow_transactions WHERE id = ?').bind(oldOpenId).first()).not.toBeNull();
+  });
+});
+
+describe('daily cron', () => {
+  it('deletes expired sessions and old ended transactions', async () => {
+    const owner = await createUserWithRoleAndLogin('cron-owner@example.com', await getOwnerRoleId(), 'CronOwner');
+    const oldId = await createTransaction(owner);
+    const oldOpenId = await createTransaction(owner);
+    await env.DB.prepare("UPDATE workflow_transactions SET created_at = datetime('now', '-4 months') WHERE id IN (?, ?)").bind(oldId, oldOpenId).run();
+    await env.DB.prepare("UPDATE workflow_transactions SET status = 'end' WHERE id = ?").bind(oldId).run();
+    const ownerId = (await env.DB.prepare("SELECT id FROM users WHERE email = 'cron-owner@example.com'").first<{ id: number }>())!.id;
+    await env.DB
+      .prepare("INSERT INTO sessions (token, user_id, expires_at) VALUES ('cron-expired', ?, datetime('now', '-1 day'))")
+      .bind(ownerId)
+      .run();
+
+    await worker.scheduled(createScheduledController({ cron: '0 3 * * *' }), env);
+    expect(await env.DB.prepare("SELECT 1 FROM sessions WHERE token = 'cron-expired'").first()).toBeNull();
+    expect(await env.DB.prepare('SELECT id FROM workflow_transactions WHERE id = ?').bind(oldId).first()).toBeNull();
+    expect(await env.DB.prepare('SELECT id FROM workflow_transactions WHERE id = ?').bind(oldOpenId).first()).not.toBeNull();
+  });
+});
+
+describe('workflow_transactions indexes', () => {
+  const plan = async (sql: string) =>
+    (await env.DB.prepare(`EXPLAIN QUERY PLAN ${sql}`).all<{ detail: string }>()).results.map((r) => r.detail).join('\n');
+
+  it("serve the owner's status queries and the customer's list", async () => {
+    expect(
+      await plan("SELECT * FROM workflow_transactions WHERE created_by = 1 AND status IN ('hold', 'in_progress', 'done', 'ready_to_pickup')"),
+    ).toContain('idx_workflow_transactions_owner_status');
+    expect(await plan("SELECT status, COUNT(*) FROM workflow_transactions WHERE created_by = 1 GROUP BY status")).toContain(
+      'idx_workflow_transactions_owner_status',
+    );
+    expect(await plan('SELECT * FROM workflow_transactions WHERE customer_user_id = 1')).toContain('idx_workflow_transactions_customer');
   });
 });

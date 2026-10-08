@@ -17,6 +17,7 @@ import { sanitizeHtml } from '../../../worker/sanitize';
 import { generateToken, hashPassword } from '../../../worker/crypto';
 import { generateCode, isValidCode } from './code';
 import type { TrackUpdate } from './TrackRoom';
+import { purgeOldEndedTransactions } from './purge';
 
 // description is rich text (CKEditor HTML), sanitized on write. Rows written
 // before that were plain text, stored unsanitized — so every read sanitizes
@@ -418,7 +419,12 @@ workflowRoutes.get('/transactions', requirePermission('manage_users'), async (c)
   let paging: { page: number; page_size: number; total: number } | null = null;
   if (status === undefined) {
     ({ results } = await c.env.DB
-      .prepare(`SELECT * FROM workflow_transactions WHERE created_by = ? AND status != 'end' ${order}`)
+      // IN rather than != 'end', so the (created_by, status, created_at)
+      // index skips the ended rows instead of reading them.
+      .prepare(
+        `SELECT * FROM workflow_transactions
+         WHERE created_by = ? AND status IN ('hold', 'in_progress', 'done', 'ready_to_pickup') ${order}`,
+      )
       .bind(user.id)
       .all<WorkflowTransaction>());
   } else {
@@ -482,23 +488,13 @@ workflowRoutes.get('/admin/transactions', requireRole('superadmin'), async (c) =
   });
 });
 
-// Superadmin console: permanently delete every transaction created more than
-// 3 months ago. { dry_run: true } only counts.
+// Superadmin console: permanently delete ended transactions created more than
+// 3 months ago (see purge.ts — the daily cron does the same). { dry_run: true }
+// only counts.
 workflowRoutes.post('/admin/transactions/purge-old', requireRole('superadmin'), async (c) => {
   const body = await c.req.json().catch(() => null);
   const dryRun = body?.dry_run === true;
-  // One cutoff for every statement below, so they all agree on the set.
-  const cutoff = (await c.env.DB.prepare("SELECT datetime('now', '-3 months') AS t").first<{ t: string }>())!.t;
-
-  const counts = await c.env.DB
-    .prepare('SELECT COUNT(*) AS transactions FROM workflow_transactions WHERE created_at < ?')
-    .bind(cutoff)
-    .first<{ transactions: number }>();
-  const result = { cutoff, transactions: counts?.transactions ?? 0 };
-  if (dryRun || result.transactions === 0) return c.json({ ...result, dry_run: dryRun });
-
-  await c.env.DB.prepare('DELETE FROM workflow_transactions WHERE created_at < ?').bind(cutoff).run();
-  return c.json({ ...result, dry_run: false });
+  return c.json({ ...(await purgeOldEndedTransactions(c.env.DB, { dryRun })), dry_run: dryRun });
 });
 
 // Superadmin console: one transaction in full.

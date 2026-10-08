@@ -169,24 +169,28 @@ fails with error 1102.
 
 Deletes are free.
 
-## Recommendations (not yet implemented)
+## Recommendations
+
+**Done:** 1, 2, 4 and 5 (migration `0008_query_indexes.sql`, daily cron in
+`worker/index.ts`). The estimates in §2–§4 above describe the code before
+these changes, so they are now on the pessimistic side.
 
 Ordered by impact on the first limit you'd hit:
 
-1. **Add an index for the owner's status queries**, e.g.
+1. ✅ **Add an index for the owner's status queries**, e.g.
    `CREATE INDEX idx_workflow_tx_owner_status ON workflow_transactions(created_by, status, created_at);`
    The open list then reads only open rows, and the "End" page reads only its
    10 rows plus the count. This removes most of §2's cost.
-2. **Index `customer_user_id`**:
+2. ✅ **Index `customer_user_id`**:
    `CREATE INDEX idx_workflow_tx_customer ON workflow_transactions(customer_user_id);`
    `/my-transactions` then reads only that customer's rows instead of the whole table.
 3. **Avoid the second reload after each status change.** The page re-fetches
    counts and the open list after every change; it could update locally from
    the `PUT` response. That's about 2 fewer Worker requests and 2 fewer scans
    per change.
-4. **Run the 3-month purge on a schedule** (a Cron Trigger) instead of by hand.
+4. ✅ **Run the 3-month purge on a schedule** (ended transactions only — open orders are never deleted) (a Cron Trigger) instead of by hand.
    That keeps N, and so §2's cost, bounded.
-5. **Delete expired sessions on a schedule** (the same cron).
+5. ✅ **Delete expired sessions on a schedule** (the same cron).
 6. **Watch auth CPU time.** If 1102 errors show up on login, lowering the
    PBKDF2 iterations or moving to Workers Paid (30 s CPU) fixes it.
 
