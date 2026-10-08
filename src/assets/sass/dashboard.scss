@@ -526,6 +526,19 @@
     background: var(--m3-secondary-container);
   }
 
+  // M3 button with leading icon: 18px icon, tighter leading padding.
+  .dashboard__button--with-icon {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding-left: 16px;
+
+    .m3-icon {
+      width: 18px;
+      height: 18px;
+    }
+  }
+
   .dashboard__table {
     th,
     td {

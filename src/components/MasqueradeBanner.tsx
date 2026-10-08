@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { apiFetch, ApiError } from '../lib/api';
 import type { AuthUser, Masquerade } from '../lib/useCurrentUser';
 import '../assets/sass/masquerade-banner.scss';
@@ -13,12 +14,14 @@ export default function MasqueradeBanner({
   refresh: () => Promise<void>;
 }) {
   const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   async function handleReturn() {
     setError(null);
     try {
       await apiFetch('/auth/return-to-admin', { method: 'POST' });
       await refresh();
+      navigate('/admin');
     } catch (err) {
       setError(err instanceof ApiError ? err.code : 'unknown_error');
     }

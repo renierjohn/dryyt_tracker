@@ -88,6 +88,56 @@
     vertical-align: middle;
   }
 
+  // Collapsible card title (Sessions tab): chevron points down when collapsed.
+  .admin__collapse {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: 0;
+    cursor: pointer;
+
+    &::after {
+      content: '';
+      width: 8px;
+      height: 8px;
+      margin-top: -4px;
+      border-right: 2px solid currentColor;
+      border-bottom: 2px solid currentColor;
+      transform: rotate(45deg);
+      transition: transform 0.15s;
+    }
+
+    &[aria-expanded='true']::after {
+      margin-top: 4px;
+      transform: rotate(-135deg);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--m3-primary);
+      outline-offset: 4px;
+      border-radius: 4px;
+    }
+  }
+
+  // Row-selection column (Sessions tab).
+  .admin__select-cell {
+    width: 1%;
+    padding-right: 0;
+  }
+
+  .admin__checkbox {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    vertical-align: middle;
+    accent-color: var(--m3-primary);
+    cursor: pointer;
+  }
+
   // Deactivated users: dim the row's text, but not the actions (Reactivate).
   .admin__row--inactive td:not(:last-child) {
     opacity: 0.8;

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { apiFetch, ApiError } from '../lib/api';
 import AlertEditor, { type AlertFormValues } from '../components/AlertEditor';
 import AppShell from '../components/AppShell';
@@ -617,19 +617,26 @@ function TransactionsPanel() {
   );
 }
 
+// What the confirm dialog will delete: every expired session, or the checked rows.
+type SessionsDeletion = { kind: 'expired' } | { kind: 'selected'; ids: number[] };
+
 function SessionsPanel() {
   const [body, setBody] = useState<SessionsBody | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState(false);
+  const [confirming, setConfirming] = useState<SessionsDeletion | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     apiFetch<SessionsBody>('/admin/sessions')
       .then((result) => {
-        if (!cancelled) setBody(result);
+        if (!cancelled) {
+          setBody(result);
+          setSelected(new Set());
+        }
       })
       .catch((err) => {
         if (!cancelled) setError(errorMessage(err));
@@ -639,14 +646,34 @@ function SessionsPanel() {
     };
   }, [tick]);
 
-  async function deleteExpired() {
-    setConfirming(false);
+  function toggle(ids: number[], checked: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (checked) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  }
+
+  async function runDeletion(deletion: SessionsDeletion) {
+    setConfirming(null);
     setError(null);
     setNotice(null);
     setDeleting(true);
     try {
-      const { deleted } = await apiFetch<{ deleted: number }>('/admin/sessions/expired', { method: 'DELETE' });
-      setNotice(`Deleted ${deleted} expired session(s).`);
+      if (deletion.kind === 'expired') {
+        const { deleted } = await apiFetch<{ deleted: number }>('/admin/sessions/expired', { method: 'DELETE' });
+        setNotice(`Deleted ${deleted} expired session(s).`);
+      } else {
+        const { deleted } = await apiFetch<{ deleted: number }>('/admin/sessions/delete', {
+          method: 'POST',
+          body: JSON.stringify({ ids: deletion.ids }),
+        });
+        const skipped = deletion.ids.length - deleted;
+        setNotice(`Deleted ${deleted} session(s).${skipped > 0 ? ' Your own session was kept.' : ''}`);
+      }
       setTick((t) => t + 1);
     } catch (err) {
       setError(errorMessage(err));
@@ -655,39 +682,81 @@ function SessionsPanel() {
     }
   }
 
+  const selectedIn = (sessions?: AdminSession[]) => (sessions ?? []).filter((s) => selected.has(s.id)).map((s) => s.id);
+  const activeSelected = selectedIn(body?.active);
+  const expiredSelected = selectedIn(body?.expired);
+
+  function deleteSelectedButton(ids: number[]) {
+    return (
+      <button
+        type="button"
+        className="admin__action admin__action--danger"
+        onClick={() => setConfirming({ kind: 'selected', ids })}
+        disabled={deleting || ids.length === 0}
+        title="Delete the checked sessions"
+      >
+        {deleting ? 'Deleting…' : `Delete${ids.length ? ` (${ids.length})` : ''}`}
+      </button>
+    );
+  }
+
   return (
     <>
       {error && <p className="m3-banner m3-banner--error" role="alert">{error}</p>}
       {notice && <p className="m3-banner" role="status">{notice}</p>}
-      <div className="m3-card m3-card--flush">
-        <div className="admin__toolbar">
-          <h2 className="m3-card__title">Active ({body?.active_total ?? '…'})</h2>
-        </div>
-        <SessionsTable sessions={body?.active} total={body?.active_total} empty="No active sessions." />
-      </div>
-      <div className="m3-card m3-card--flush admin__sessions-expired">
-        <div className="admin__toolbar">
-          <h2 className="m3-card__title">Expired ({body?.expired_total ?? '…'})</h2>
-          <button
-            type="button"
-            className="admin__action admin__action--danger"
-            onClick={() => setConfirming(true)}
-            disabled={deleting || !body?.expired_total}
-            title="Delete every expired session"
-          >
-            {deleting ? 'Deleting…' : 'Delete'}
-          </button>
-        </div>
-        <SessionsTable sessions={body?.expired} total={body?.expired_total} empty="No expired sessions." />
-      </div>
+      <CollapsibleCard
+        title={`Active (${body?.active_total ?? '…'})`}
+        actions={deleteSelectedButton(activeSelected)}
+      >
+        <SessionsTable
+          sessions={body?.active}
+          total={body?.active_total}
+          empty="No active sessions."
+          selected={selected}
+          onToggle={toggle}
+        />
+      </CollapsibleCard>
+      <CollapsibleCard
+        className="admin__sessions-expired"
+        title={`Expired (${body?.expired_total ?? '…'})`}
+        actions={
+          <>
+            {deleteSelectedButton(expiredSelected)}
+            <button
+              type="button"
+              className="admin__action admin__action--danger"
+              onClick={() => setConfirming({ kind: 'expired' })}
+              disabled={deleting || !body?.expired_total}
+              title="Delete every expired session"
+            >
+              Delete all
+            </button>
+          </>
+        }
+      >
+        <SessionsTable
+          sessions={body?.expired}
+          total={body?.expired_total}
+          empty="No expired sessions."
+          selected={selected}
+          onToggle={toggle}
+        />
+      </CollapsibleCard>
       {confirming && body && (
-        <Dialog title="Delete expired sessions?" onClose={() => setConfirming(false)}>
-          <p>Permanently delete {body.expired_total} expired session(s)? Active sessions aren’t affected.</p>
+        <Dialog
+          title={confirming.kind === 'expired' ? 'Delete expired sessions?' : 'Delete selected sessions?'}
+          onClose={() => setConfirming(null)}
+        >
+          <p>
+            {confirming.kind === 'expired'
+              ? `Permanently delete ${body.expired_total} expired session(s)? Active sessions aren’t affected.`
+              : `Permanently delete ${confirming.ids.length} session(s)? Active ones are signed out immediately; your own session is kept.`}
+          </p>
           <div className="admin__dialog-actions">
-            <button type="button" className="m3-button m3-button--tonal" onClick={() => setConfirming(false)}>
+            <button type="button" className="m3-button m3-button--tonal" onClick={() => setConfirming(null)}>
               Cancel
             </button>
-            <button type="button" className="m3-button admin__dialog-danger" onClick={() => void deleteExpired()}>
+            <button type="button" className="m3-button admin__dialog-danger" onClick={() => void runDeletion(confirming)}>
               Delete
             </button>
           </div>
@@ -697,15 +766,82 @@ function SessionsPanel() {
   );
 }
 
-function SessionsTable({ sessions, total, empty }: { sessions?: AdminSession[]; total?: number; empty: string }) {
+// Flush card whose table body is collapsed by default. Not a <details>: the
+// toolbar actions sit in the header and must not toggle it.
+function CollapsibleCard({
+  title,
+  actions,
+  className,
+  children,
+}: {
+  title: string;
+  actions?: ReactNode;
+  className?: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={`m3-card m3-card--flush${className ? ` ${className}` : ''}`}>
+      <div className="admin__toolbar">
+        <h2 className="m3-card__title">
+          <button type="button" className="admin__collapse" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+            {title}
+          </button>
+        </h2>
+        {actions}
+      </div>
+      {open && children}
+    </div>
+  );
+}
+
+// Header checkbox: checked when every row is, indeterminate when only some are.
+function SelectAllCheckbox({ checked, indeterminate, onChange }: { checked: boolean; indeterminate: boolean; onChange: (checked: boolean) => void }) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = indeterminate;
+  }, [indeterminate]);
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      className="admin__checkbox"
+      aria-label="Select all rows"
+      checked={checked}
+      onChange={(e) => onChange(e.target.checked)}
+    />
+  );
+}
+
+function SessionsTable({
+  sessions,
+  total,
+  empty,
+  selected,
+  onToggle,
+}: {
+  sessions?: AdminSession[];
+  total?: number;
+  empty: string;
+  selected: Set<number>;
+  onToggle: (ids: number[], checked: boolean) => void;
+}) {
   if (!sessions) return <p className="m3-supporting admin__empty">Loading…</p>;
   if (sessions.length === 0) return <p className="m3-supporting admin__empty">{empty}</p>;
+  const checkedCount = sessions.filter((s) => selected.has(s.id)).length;
   return (
     <>
       <div className="m3-table-wrap">
         <table className="m3-table admin__table">
           <thead>
             <tr>
+              <th className="admin__select-cell">
+                <SelectAllCheckbox
+                  checked={checkedCount === sessions.length}
+                  indeterminate={checkedCount > 0 && checkedCount < sessions.length}
+                  onChange={(checked) => onToggle(sessions.map((s) => s.id), checked)}
+                />
+              </th>
               <th>#</th>
               <th>User</th>
               <th>Role</th>
@@ -716,6 +852,15 @@ function SessionsTable({ sessions, total, empty }: { sessions?: AdminSession[]; 
           <tbody>
             {sessions.map((s) => (
               <tr key={s.id}>
+                <td className="admin__select-cell">
+                  <input
+                    type="checkbox"
+                    className="admin__checkbox"
+                    aria-label={`Select session ${s.id}`}
+                    checked={selected.has(s.id)}
+                    onChange={(e) => onToggle([s.id], e.target.checked)}
+                  />
+                </td>
                 <td>{s.id}</td>
                 <td>
                   <span className="admin__user-text">

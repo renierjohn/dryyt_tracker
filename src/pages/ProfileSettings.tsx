@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { AuthUser } from '../lib/useCurrentUser';
 import { apiFetch, ApiError } from '../lib/api';
 import { canSendAlerts, isCustomer, isOwner } from '../lib/permissions';
+import { Icon } from '../components/AppShell';
 import AlertEditor, { type AlertFormValues } from '../components/AlertEditor';
 import '../assets/sass/dashboard.scss';
 import {
@@ -290,11 +291,12 @@ function CoordinatesForm() {
             Save coordinates
           </button>
           <button
-            className="dashboard__button dashboard__button--tonal"
+            className="dashboard__button dashboard__button--tonal dashboard__button--with-icon"
             type="button"
             onClick={handleLocate}
             disabled={!loaded || locating}
           >
+            <Icon name="pin" />
             {locating ? 'Locating…' : 'Locate Me'}
           </button>
         </div>

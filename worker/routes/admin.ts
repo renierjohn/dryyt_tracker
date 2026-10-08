@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
-import { getUserById, searchUsersWithRoles, userStats, updateUserAdminFields, setUserActive, getUserByEmail, getRoleById, listRoles, createUser, deleteSessionsForUser, listSessions, deleteExpiredSessions } from '../db';
-import { requireRole, startMasquerade } from '../middleware/auth';
+import { getUserById, searchUsersWithRoles, userStats, updateUserAdminFields, setUserActive, getUserByEmail, getRoleById, listRoles, createUser, deleteSessionsForUser, listSessions, deleteExpiredSessions, deleteSessionsByIds } from '../db';
+import { getCookie } from 'hono/cookie';
+import { requireRole, SESSION_COOKIE, startMasquerade } from '../middleware/auth';
 import { hashPassword } from '../crypto';
 import { isValidEmail, toPublicUser } from '../util';
 import type { AppBindings } from '../types';
@@ -53,6 +54,17 @@ adminRoutes.get('/sessions', async (c) => {
 // clears the rows out.
 adminRoutes.delete('/sessions/expired', async (c) => {
   return c.json({ deleted: await deleteExpiredSessions(c.env.DB) });
+});
+
+// Body: { ids: number[] } (display ids from GET /sessions). The caller's own
+// session is skipped, so `deleted` can be less than ids.length.
+adminRoutes.post('/sessions/delete', async (c) => {
+  const body = await c.req.json().catch(() => null);
+  const ids: unknown[] = Array.isArray(body?.ids) ? body.ids : [];
+  if (ids.length === 0 || ids.length > SESSIONS_LIMIT * 2 || !ids.every((id) => Number.isInteger(id) && (id as number) > 0)) {
+    return c.json({ error: 'invalid_ids' }, 400);
+  }
+  return c.json({ deleted: await deleteSessionsByIds(c.env.DB, ids as number[], getCookie(c, SESSION_COOKIE) ?? '') });
 });
 
 // Superadmin (id 1) is excluded: it can never be assigned via the create/edit

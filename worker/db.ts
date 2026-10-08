@@ -367,6 +367,24 @@ export async function deleteExpiredSessions(db: D1Database): Promise<number> {
   return result.meta.changes;
 }
 
+// Deletes sessions by display id (rowid), never the caller's own token so a
+// superadmin can't sign themselves out from the Sessions tab. Chunked to stay
+// under D1's 100 bound parameters per statement.
+export async function deleteSessionsByIds(db: D1Database, ids: number[], keepToken: string): Promise<number> {
+  const statements = [];
+  for (let i = 0; i < ids.length; i += 90) {
+    const chunk = ids.slice(i, i + 90);
+    statements.push(
+      db
+        .prepare(`DELETE FROM sessions WHERE rowid IN (${chunk.map(() => '?').join(', ')}) AND token != ?`)
+        .bind(...chunk, keepToken),
+    );
+  }
+  if (statements.length === 0) return 0;
+  const results = await db.batch(statements);
+  return results.reduce((n, r) => n + r.meta.changes, 0);
+}
+
 export async function deleteAllPasswordResetsForUser(db: D1Database, userId: number): Promise<void> {
   await db.prepare('DELETE FROM password_resets WHERE user_id = ?').bind(userId).run();
 }

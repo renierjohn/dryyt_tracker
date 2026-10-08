@@ -27,7 +27,8 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => Promise<void> 
       navigate(isSuperadmin(user) ? '/admin' : '/dashboard', { replace: true });
     } catch (err) {
       resetTurnstile();
-      setError(err instanceof ApiError ? err.code : err instanceof Error ? err.message : 'unknown_error');
+      const code = err instanceof ApiError ? err.code : err instanceof Error ? err.message : 'unknown_error';
+      setError(code === 'unknown_error' || code === 'invalid_credentials' ? 'Invalid Account' : code);
     }
   }
 
