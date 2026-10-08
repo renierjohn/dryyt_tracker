@@ -271,7 +271,7 @@ describe('GET /api/plugins/workflow/track/:code', () => {
     const adminRoleId = await getAdminRoleId();
     const adminCookie = await createUserWithRoleAndLogin('workflow-track@example.com', adminRoleId, 'Admin');
     const createRes = await req('POST', '/api/plugins/workflow/transactions', {
-      customer_name: 'Track Target', customer_contact: '09998887777', description: 'Trousers',
+      customer_name: 'Track Target', customer_contact: '09998887777', description: 'Trousers', weight_kg: 2.5,
     }, adminCookie);
     const created = (await createRes.json()) as { transaction: { code: string } };
 
@@ -279,6 +279,7 @@ describe('GET /api/plugins/workflow/track/:code', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { transaction: Record<string, unknown> };
     expect(body.transaction.customer_name).toBe('Track Target');
+    expect(body.transaction.weight_kg).toBe(2.5);
     expect(body.transaction.status).toBe('hold');
     expect(body.transaction.control_number).toMatch(/^\d{6}$/);
     expect(body.transaction.owner_name).toBe('Admin');

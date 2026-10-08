@@ -46,7 +46,7 @@ workflowRoutes.get('/track/:code', async (c) => {
   const code = c.req.param('code').toUpperCase();
   const row = await c.env.DB
     .prepare(
-      `SELECT t.code, t.control_number, t.customer_name, t.description, t.status, t.updated_at,
+      `SELECT t.code, t.control_number, t.customer_name, t.weight_kg, t.description, t.status, t.updated_at,
               o.display_name AS owner_name, o.address AS owner_address
        FROM workflow_transactions t JOIN users o ON o.id = t.created_by
        WHERE t.code = ?`,

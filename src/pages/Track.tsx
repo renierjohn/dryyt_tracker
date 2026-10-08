@@ -15,6 +15,7 @@ interface TrackedTransaction {
   owner_name: string;
   owner_address: string | null;
   customer_name: string;
+  weight_kg: number | null;
   description: string | null;
   status: string;
   updated_at: string;
@@ -138,7 +139,7 @@ export default function Track() {
             </div>
 
             {transaction.status === 'hold' ? (
-              <p className="m3-supporting">This code is on hold. Contact the store for details.</p>
+              <p className="m3-supporting">This code is on hold.</p>
             ) : (
               <ol className="track__steps">
                 {STEPS.map((step, i) => (
@@ -159,6 +160,12 @@ export default function Track() {
                 <dt>Customer</dt>
                 <dd>{transaction.customer_name}</dd>
               </div>
+              {transaction.weight_kg !== null && (
+                <div>
+                  <dt>Weight</dt>
+                  <dd>{transaction.weight_kg} kg</dd>
+                </div>
+              )}
               {transaction.description && (
                 <div>
                   <dt>Notes</dt>
