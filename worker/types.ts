@@ -3,6 +3,8 @@ export interface Env {
   AVATARS: R2Bucket;
   DEV_MODE?: 'true' | 'false';
   TURNSTILE_SECRET_KEY?: string;
+  // Comma-separated origins allowed to call /api/* cross-origin (see middleware/cors).
+  CORS_ORIGINS?: string;
 }
 
 export interface AuthUser {

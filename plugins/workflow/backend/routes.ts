@@ -318,28 +318,55 @@ workflowRoutes.get('/transactions/next-control-number', requirePermission('manag
   return c.json({ control_number: await nextControlNumber(c.env.DB, c.get('user')!.id) });
 });
 
-// The signed-in owner's own users, for the customer-name autocomplete and the
-// dashboard users list — each with the codes of transactions registered for them.
+// The signed-in owner's own users, for the customer-name autocomplete — each
+// with the codes of transactions registered for them. ?contact_number= narrows
+// it to the customers with that number (digits only compared) and adds their
+// transactions, for the dashboard users list's "View" modal.
 workflowRoutes.get('/customers', requirePermission('manage_users'), async (c) => {
   const ownerId = c.get('user')!.id;
-  const users = await listOwnerCustomers(c.env.DB, ownerId);
+  const contactRaw = c.req.query('contact_number');
+  const contact = contactRaw === undefined ? null : normalizeContact(contactRaw);
+  if (contact === '') return c.json({ error: 'invalid_contact_number' }, 400);
+
+  let users = await listOwnerCustomers(c.env.DB, ownerId);
+  if (contact !== null) users = users.filter((u) => u.contact_number && normalizeContact(u.contact_number) === contact);
+  if (users.length === 0) return c.json({ customers: [] });
+  // Filtered: just those customers' transactions, in full. Otherwise only the
+  // codes are needed.
+  const ids = users.map((u) => u.id);
   const { results: txns } = await c.env.DB
     .prepare(
-      `SELECT customer_user_id, code FROM workflow_transactions
-       WHERE created_by = ? AND customer_user_id IS NOT NULL ORDER BY created_at DESC, id DESC`,
+      `SELECT ${contact === null ? 'customer_user_id, code' : '*'} FROM workflow_transactions
+       WHERE created_by = ? AND customer_user_id IS NOT NULL
+         ${contact === null ? '' : `AND customer_user_id IN (${ids.map(() => '?').join(', ')})`}
+       ORDER BY created_at DESC, id DESC`,
     )
-    .bind(ownerId)
-    .all<{ customer_user_id: number; code: string }>();
-  const codes = new Map<number, string[]>();
-  for (const t of txns) codes.set(t.customer_user_id, [...(codes.get(t.customer_user_id) ?? []), t.code]);
+    .bind(ownerId, ...(contact === null ? [] : ids))
+    .all<WorkflowTransaction>();
+  const byCustomer = new Map<number, WorkflowTransaction[]>();
+  for (const t of txns) byCustomer.set(t.customer_user_id!, [...(byCustomer.get(t.customer_user_id!) ?? []), t]);
   return c.json({
-    customers: users.map((u) => ({
-      id: u.id,
-      display_name: u.display_name,
-      email: u.email,
-      contact_number: u.contact_number,
-      codes: codes.get(u.id) ?? [],
-    })),
+    customers: users.map((u) => {
+      const own = byCustomer.get(u.id) ?? [];
+      return {
+        id: u.id,
+        display_name: u.display_name,
+        email: u.email,
+        contact_number: u.contact_number,
+        codes: own.map((t) => t.code),
+        ...(contact !== null && {
+          transactions: own.map((t) => ({
+            id: t.id,
+            control_number: t.control_number,
+            code: t.code,
+            weight_kg: t.weight_kg,
+            status: t.status,
+            created_at: t.created_at,
+            done_at: t.done_at,
+          })),
+        }),
+      };
+    }),
   });
 });
 
@@ -467,7 +494,7 @@ workflowRoutes.get('/my-transactions', requireAuth, async (c) => {
   const user = c.get('user')!;
   const { results } = await c.env.DB
     .prepare(
-      `SELECT t.id, t.control_number, t.code, t.customer_name, t.description, t.status,
+      `SELECT t.id, t.control_number, t.code, t.weight_kg, t.customer_name, t.description, t.status,
               t.created_at, t.updated_at, t.done_at, o.display_name AS owner_name
        FROM workflow_transactions t JOIN users o ON o.id = t.created_by
        WHERE t.customer_user_id = ? ORDER BY t.created_at DESC, t.id DESC`,

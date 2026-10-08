@@ -12,3 +12,7 @@ DEV_MODE=true
 # src/lib/useTurnstile.ts). Leave unset to skip verification locally (DEV_MODE
 # only); deployed envs get it via `wrangler secret put TURNSTILE_SECRET_KEY --env <env>`.
 TURNSTILE_SECRET_KEY=
+
+# Origins allowed to call /api/* cross-origin (comma-separated), e.g.
+# "http://localhost:3000". Deployed envs set it under `vars` in wrangler.jsonc.
+CORS_ORIGINS=

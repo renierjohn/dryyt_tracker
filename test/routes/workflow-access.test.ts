@@ -49,7 +49,7 @@ describe("customer's own transactions", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { transactions: Array<{ code: string; customer_contact?: unknown }> };
     expect(body.transactions).toHaveLength(1);
-    expect(body.transactions[0]).toMatchObject({ code: mine.transaction.code, owner_name: 'Owner' });
+    expect(body.transactions[0]).toMatchObject({ code: mine.transaction.code, owner_name: 'Owner', weight_kg: null });
     expect((body.transactions[0] as { control_number?: string }).control_number).toMatch(/^\d{6}$/);
     expect(body.transactions[0].customer_contact).toBeUndefined();
     // Still can't list/manage the owner's transactions.

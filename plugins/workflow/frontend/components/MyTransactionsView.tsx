@@ -11,6 +11,7 @@ interface MyTransaction {
   control_number: string | null;
   owner_name: string;
   code: string;
+  weight_kg: number | null;
   customer_name: string;
   description: string | null;
   status: string;
@@ -25,6 +26,8 @@ export default function MyTransactionsView() {
   const [transactions, setTransactions] = useState<MyTransaction[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [openTransaction, setOpenTransaction] = useState<MyTransaction | null>(null);
+  // Rounded to 2 decimals to drop float noise (0.1 + 0.2).
+  const totalWeight = Math.round(transactions.reduce((sum, t) => sum + (t.weight_kg ?? 0), 0) * 100) / 100;
 
   useEffect(() => {
     apiFetch<{ transactions: MyTransaction[] }>('/plugins/workflow/my-transactions')
@@ -49,6 +52,7 @@ export default function MyTransactionsView() {
                     <th>Control #</th>
                     <th>Owner</th>
                     <th>Code</th>
+                    <th>Weight (kg)</th>
                     <th>Description</th>
                     <th>Status</th>
                     <th>Start</th>
@@ -65,6 +69,7 @@ export default function MyTransactionsView() {
                           <code>{t.code}</code>
                         </Link>
                       </td>
+                      <td>{t.weight_kg ?? '—'}</td>
                       <td>
                         <button type="button" className="txn-desc" onClick={() => setOpenTransaction(t)}>
                           {t.description ? (
@@ -80,6 +85,13 @@ export default function MyTransactionsView() {
                     </tr>
                   ))}
                 </tbody>
+                <tfoot>
+                  <tr className="txn-total">
+                    <th colSpan={3}>Total weight</th>
+                    <th className="txn-total__value">{totalWeight}</th>
+                    <th colSpan={4} />
+                  </tr>
+                </tfoot>
               </table>
             </div>
           )}

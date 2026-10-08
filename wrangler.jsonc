@@ -18,7 +18,10 @@
 		}
 	],
 	"vars": {
-		"DEV_MODE": "false"
+		"DEV_MODE": "false",
+		// Origins allowed to call /api/* cross-origin (comma-separated) — the
+		// Vite dev server locally; each env below allows its own custom domain.
+		"CORS_ORIGINS": "http://localhost:5173"
 	},
 	"assets": {
 		"directory": "./dist",
@@ -53,7 +56,8 @@
 				}
 			],
 			"vars": {
-				"DEV_MODE": "false"
+				"DEV_MODE": "false",
+				"CORS_ORIGINS": "https://app-demo.dryyt.com"
 			}
 		},
 		"production": {
@@ -79,7 +83,8 @@
 				}
 			],
 			"vars": {
-				"DEV_MODE": "false"
+				"DEV_MODE": "false",
+				"CORS_ORIGINS": "https://app.dryyt.com"
 			}
 		}
 	}

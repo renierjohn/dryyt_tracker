@@ -271,3 +271,17 @@
     cursor: pointer;
   }
 }
+
+// Tracker's "Total weight" footer row.
+.m3-shell .m3-table .txn-total {
+  th {
+    border-top: 1px solid color-mix(in srgb, var(--m3-outline) 40%, transparent);
+    border-bottom: 0;
+  }
+
+  .txn-total__value {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--m3-on-surface);
+  }
+}

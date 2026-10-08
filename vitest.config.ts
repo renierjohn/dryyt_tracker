@@ -15,7 +15,12 @@ export default defineConfig(async () => {
           // override it here rather than in the committed config. Turnstile's
           // secret is blanked (it would otherwise come from .dev.vars) so auth
           // requests skip siteverify, as DEV_MODE allows.
-          bindings: { TEST_MIGRATIONS: migrations, DEV_MODE: 'true', TURNSTILE_SECRET_KEY: '' },
+          bindings: {
+            TEST_MIGRATIONS: migrations,
+            DEV_MODE: 'true',
+            TURNSTILE_SECRET_KEY: '',
+            CORS_ORIGINS: 'https://allowed.example, https://other.example',
+          },
         },
       }),
     ],

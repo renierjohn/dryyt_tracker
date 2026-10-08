@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { loadSession } from './middleware/auth';
 import { cacheControl } from './middleware/cache';
+import { apiCors } from './middleware/cors';
 import { authRoutes } from './routes/auth';
 import { profileRoutes } from './routes/profile';
 import { avatarRoutes } from './routes/avatars';
@@ -14,6 +15,8 @@ import type { AppBindings } from './types';
 
 const app = new Hono<AppBindings>();
 
+// First, so preflight OPTIONS requests are answered before auth.
+app.use('/api/*', apiCors);
 app.use('*', loadSession);
 app.use('*', cacheControl);
 app.route('/api/auth', authRoutes);

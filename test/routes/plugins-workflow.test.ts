@@ -136,6 +136,25 @@ describe('customer email registration', () => {
     ]);
   });
 
+  it('narrows to one customer by ?contact_number= (digits only) and includes their transactions', async () => {
+    const adminCookie = await createUserWithRoleAndLogin('workflow-cust-filter@example.com', await getAdminRoleId(), 'Admin');
+    for (const [name, contact] of [['Filter A', '09184440001'], ['Filter B', '09184440002'], ['Filter A', '0918 444 0001']]) {
+      expect((await req('POST', '/api/plugins/workflow/transactions', { customer_name: name, customer_contact: contact }, adminCookie)).status).toBe(201);
+    }
+    type List = { customers: Array<{ display_name: string; transactions?: Array<{ code: string; status: string }> }> };
+    const res = await req('GET', '/api/plugins/workflow/customers?contact_number=0918-444-0001', undefined, adminCookie);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as List;
+    expect(body.customers).toHaveLength(1);
+    expect(body.customers[0].display_name).toBe('Filter A');
+    expect(body.customers[0].transactions).toHaveLength(2);
+    expect(body.customers[0].transactions![0]).toMatchObject({ status: 'hold', weight_kg: null });
+
+    const none = (await (await req('GET', '/api/plugins/workflow/customers?contact_number=09990000000', undefined, adminCookie)).json()) as List;
+    expect(none.customers).toEqual([]);
+    expect((await req('GET', '/api/plugins/workflow/customers?contact_number=abc', undefined, adminCookie)).status).toBe(400);
+  });
+
   it('generates <name>@dryyt.com when there is no email, numbering repeats of a name', async () => {
     const adminCookie = await createUserWithRoleAndLogin('workflow-cust-gen@example.com', await getAdminRoleId(), 'Admin');
     for (const contact of ['09170000001', '09170000002']) {

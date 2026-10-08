@@ -154,7 +154,7 @@ export default function AppShell({
           </Link>
         )}
         {user && (owner || isCustomer(user)) && (
-          <Link className="m3-nav__item" to="/plugins/workflow" aria-current={active === 'tracker' ? 'page' : undefined}>
+          <Link className="m3-nav__item" to="/transactions" aria-current={active === 'tracker' ? 'page' : undefined}>
             <NavItem icon="tracker" label="Tracker" active={active === 'tracker'} />
           </Link>
         )}

@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { apiFetch, ApiError } from '../lib/api';
 import { CONTACT_ERROR, isInvalidContact } from '../lib/contact';
+import Dialog from './Dialog';
 import '../assets/sass/dashboard.scss';
 
 function errorMessage(err: unknown): string {
@@ -17,11 +18,33 @@ interface ChildUser {
   created_at: string;
 }
 
+interface CustomerTransaction {
+  id: number;
+  control_number: string | null;
+  code: string;
+  weight_kg: number | null;
+  status: string;
+  created_at: string;
+  done_at: string | null;
+}
+
+// Mirrors the workflow plugin's status labels.
+const STATUS_LABELS: Record<string, string> = {
+  hold: 'On hold',
+  in_progress: 'In progress',
+  done: 'Done',
+  ready_to_pickup: 'Ready for pickup',
+  end: 'End',
+};
+
+function formatDateTime(value: string | null): string {
+  if (!value) return '—';
+  return new Date(value.replace(' ', 'T') + 'Z').toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+}
+
 export default function OwnerUsers() {
   const [users, setUsers] = useState<ChildUser[]>([]);
-  // Transaction codes per user id, from the workflow plugin. Best-effort: the
-  // column just stays empty when the plugin isn't available.
-  const [codes, setCodes] = useState<Map<number, string[]>>(new Map());
+  const [viewing, setViewing] = useState<ChildUser | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
@@ -46,12 +69,6 @@ export default function OwnerUsers() {
       setError(null);
     } catch (err) {
       setError(errorMessage(err));
-    }
-    try {
-      const body = await apiFetch<{ customers: { id: number; codes: string[] }[] }>('/plugins/workflow/customers');
-      setCodes(new Map(body.customers.map((c) => [c.id, c.codes])));
-    } catch {
-      setCodes(new Map());
     }
   }
 
@@ -98,12 +115,13 @@ export default function OwnerUsers() {
                     <td>{u.display_name}</td>
                     <td>{u.contact_number ?? ''}</td>
                     <td>
-                      {(codes.get(u.id) ?? []).map((code, i) => (
-                        <span key={code}>
-                          {i > 0 && ', '}
-                          <code>{code}</code>
-                        </span>
-                      ))}
+                      {u.contact_number ? (
+                        <button type="button" className="dashboard__link" onClick={() => setViewing(u)}>
+                          View
+                        </button>
+                      ) : (
+                        '—'
+                      )}
                     </td>
                     <td>
                       <div className="dashboard__alert-actions">
@@ -149,7 +167,79 @@ export default function OwnerUsers() {
           </nav>
         )}
       </section>
+      {viewing && <TransactionsDialog user={viewing} onClose={() => setViewing(null)} />}
     </>
+  );
+}
+
+// The customer's transactions with this owner, looked up by contact number.
+function TransactionsDialog({ user, onClose }: { user: ChildUser; onClose: () => void }) {
+  const [transactions, setTransactions] = useState<CustomerTransaction[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  // Rounded to 2 decimals to drop float noise (0.1 + 0.2).
+  const totalWeight = Math.round((transactions ?? []).reduce((sum, t) => sum + (t.weight_kg ?? 0), 0) * 100) / 100;
+
+  useEffect(() => {
+    let cancelled = false;
+    const qs = new URLSearchParams({ contact_number: user.contact_number ?? '' });
+    apiFetch<{ customers: { id: number; transactions: CustomerTransaction[] }[] }>(`/plugins/workflow/customers?${qs}`)
+      .then((body) => {
+        if (!cancelled) setTransactions(body.customers.find((c) => c.id === user.id)?.transactions ?? []);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(errorMessage(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  return (
+    <Dialog title={`Transactions — ${user.display_name}`} onClose={onClose}>
+      {error ? (
+        <p role="alert">{error}</p>
+      ) : transactions === null ? (
+        <p>Loading…</p>
+      ) : transactions.length === 0 ? (
+        <p>No transactions yet.</p>
+      ) : (
+        <div className="dashboard__table-wrap">
+          <table className="dashboard__table">
+            <thead>
+              <tr>
+                <th>Control #</th>
+                <th>Code</th>
+                <th>Weight (kg)</th>
+                <th>Status</th>
+                <th>Start</th>
+                <th>End</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map((t) => (
+                <tr key={t.id}>
+                  <td>{t.control_number ?? '—'}</td>
+                  <td>
+                    <code>{t.code}</code>
+                  </td>
+                  <td>{t.weight_kg ?? '—'}</td>
+                  <td>{STATUS_LABELS[t.status] ?? t.status}</td>
+                  <td>{formatDateTime(t.created_at)}</td>
+                  <td>{formatDateTime(t.done_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <th colSpan={2}>Total weight</th>
+                <th className="dashboard__total">{totalWeight}</th>
+                <th colSpan={3} />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </Dialog>
   );
 }
 
