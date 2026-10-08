@@ -76,16 +76,16 @@ describe('public store details', () => {
     expect(body.social_links).toEqual(links);
   });
 
-  it("includes the owner's public/both alerts but not dashboard-only ones", async () => {
+  it("includes the owner's public alerts but not dashboard-only ones", async () => {
     await createUserWithRoleAndLogin('store-alerts@example.com', await getOwnerRoleId(), 'Store Alerts');
     const owner = await env.DB.prepare("SELECT id FROM users WHERE email = 'store-alerts@example.com'").first<{ id: number }>();
-    for (const [visibility, html] of [['public', '<p>Public</p>'], ['both', '<p>Both</p>'], ['dashboard', '<p>Private</p>']]) {
+    for (const [visibility, html] of [['public', '<p>Public</p>'], ['dashboard', '<p>Private</p>']]) {
       await env.DB.prepare('INSERT INTO alerts (user_id, created_by, type, visibility, body_html) VALUES (?, ?, ?, ?, ?)')
         .bind(owner!.id, owner!.id, 'info', visibility, html)
         .run();
     }
     const body = (await (await req('GET', '/api/owners/Store%20Alerts/store')).json()) as { alerts: { body_html: string }[] };
-    expect(body.alerts.map((a) => a.body_html).sort()).toEqual(['<p>Both</p>', '<p>Public</p>']);
+    expect(body.alerts.map((a) => a.body_html).sort()).toEqual(['<p>Public</p>']);
   });
 
   it('404s for an unknown owner', async () => {

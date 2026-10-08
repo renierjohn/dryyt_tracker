@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch, ApiError } from '../lib/api';
 import type { AuthUser, Masquerade } from '../lib/useCurrentUser';
@@ -15,6 +15,20 @@ export default function MasqueradeBanner({
 }) {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Other sticky bars (dashboard alert banners) offset themselves by this.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const observer = new ResizeObserver(() => root.style.setProperty('--masquerade-banner-height', `${el.offsetHeight}px`));
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty('--masquerade-banner-height');
+    };
+  }, []);
 
   async function handleReturn() {
     setError(null);
@@ -28,7 +42,7 @@ export default function MasqueradeBanner({
   }
 
   return (
-    <div className="masquerade-banner">
+    <div className="masquerade-banner" ref={ref}>
       <span>
         {masquerade.by_display_name} is viewing as <strong>{user.display_name}</strong>
       </span>

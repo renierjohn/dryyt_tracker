@@ -26,12 +26,13 @@ interface Role {
   name: string;
 }
 
-type AdminTab = 'users' | 'transactions' | 'sessions' | 'profile';
+type AdminTab = 'users' | 'transactions' | 'sessions' | 'alerts' | 'profile';
 
 const TAB_LABELS: Record<AdminTab, string> = {
   users: 'Users',
   transactions: 'Transactions',
   sessions: 'Sessions',
+  alerts: 'Alerts',
   profile: 'Profile',
 };
 
@@ -44,6 +45,24 @@ interface AdminSession {
   impersonator_name: string | null;
   created_at: string;
   expires_at: string;
+}
+
+interface AdminAlert {
+  id: number;
+  user_id: number;
+  type: AlertFormValues['type'];
+  visibility: AlertFormValues['visibility'];
+  body_html: string;
+  created_at: string;
+  user_name: string;
+  user_email: string;
+  created_by_name: string | null;
+}
+
+interface AlertTarget {
+  id: number;
+  display_name: string;
+  email: string;
 }
 
 interface SessionsBody {
@@ -217,6 +236,7 @@ export default function AdminConsole({ user, refresh }: { user: AuthUser; refres
         {tab === 'profile' && <ProfileSettings user={user} refresh={refresh} />}
         {tab === 'transactions' && <TransactionsPanel />}
         {tab === 'sessions' && <SessionsPanel />}
+        {tab === 'alerts' && <AllAlertsPanel />}
 
         {tab === 'users' && (
           <>
@@ -611,6 +631,179 @@ function TransactionsPanel() {
               Delete
             </button>
           </div>
+        </Dialog>
+      )}
+    </>
+  );
+}
+
+const VISIBILITY_LABELS: Record<AlertFormValues['visibility'], string> = {
+  dashboard: 'Dashboard',
+  public: 'Public',
+};
+
+const alertTargetLabel = (t: AlertTarget) => `${t.display_name} - ${t.email}`;
+
+// Same contents as the dashboard Alerts tab, but across every user: create for a
+// picked recipient, and edit/delete any alert.
+function AllAlertsPanel() {
+  const [alerts, setAlerts] = useState<AdminAlert[] | null>(null);
+  const [targets, setTargets] = useState<AlertTarget[]>([]);
+  const [targetText, setTargetText] = useState('');
+  const [editing, setEditing] = useState<AdminAlert | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<{ alerts: AdminAlert[] }>('/admin/alerts')
+      .then((body) => {
+        if (!cancelled) setAlerts(body.alerts);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(errorMessage(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tick]);
+
+  useEffect(() => {
+    apiFetch<{ users: AlertTarget[] }>('/admin/alert-targets')
+      .then((body) => setTargets(body.users))
+      .catch((err) => console.error('Loading alert targets failed', err));
+  }, []);
+
+  async function run(action: () => Promise<unknown>, success: string) {
+    setError(null);
+    setNotice(null);
+    try {
+      await action();
+      setNotice(success);
+      setTick((t) => t + 1);
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  }
+
+  async function handleCreate(values: AlertFormValues) {
+    const target = targets.find((t) => alertTargetLabel(t) === targetText.trim());
+    if (!target) {
+      setNotice(null);
+      setError('Pick a user from the suggestions.');
+      return;
+    }
+    await run(
+      () => apiFetch(`/admin/users/${target.id}/alerts`, { method: 'POST', body: JSON.stringify(values) }),
+      `Alert sent to ${target.display_name}.`,
+    );
+  }
+
+  return (
+    <>
+      {error && <p className="m3-banner m3-banner--error" role="alert">{error}</p>}
+      {notice && <p className="m3-banner" role="status">{notice}</p>}
+
+      <details className="m3-card m3-collapsible">
+        <summary className="m3-card__title">New alert</summary>
+        <label className="m3-field">
+          Target User
+          <input
+            value={targetText}
+            onChange={(e) => setTargetText(e.target.value)}
+            list="admin-alert-targets"
+            autoComplete="off"
+            placeholder="Name or email"
+            required
+          />
+          <datalist id="admin-alert-targets">
+            {targets.map((t) => (
+              <option key={t.id} value={alertTargetLabel(t)} />
+            ))}
+          </datalist>
+        </label>
+        <AlertEditor submitLabel="Create alert" onSubmit={handleCreate} />
+      </details>
+
+      <div className="m3-card m3-card--flush">
+        <div className="admin__toolbar">
+          <h2 className="m3-card__title">All alerts ({alerts?.length ?? '…'})</h2>
+        </div>
+        {!alerts ? (
+          <p className="m3-supporting admin__empty">Loading…</p>
+        ) : alerts.length === 0 ? (
+          <p className="m3-supporting admin__empty">No alerts.</p>
+        ) : (
+          <div className="m3-table-wrap">
+            <table className="m3-table admin__table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Recipient</th>
+                  <th>Type</th>
+                  <th>Visibility</th>
+                  <th>Message</th>
+                  <th>From</th>
+                  <th>Created</th>
+                  <th aria-label="Actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {alerts.map((alert) => (
+                  <tr key={alert.id}>
+                    <td>{alert.id}</td>
+                    <td>
+                      <span className="admin__user-text">
+                        <span className="admin__user-name">{alert.user_name}</span>
+                        <span className="admin__user-email">{alert.user_email}</span>
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`dashboard__alert-type dashboard__alert-type--${alert.type}`}>{alert.type}</span>
+                    </td>
+                    <td className="m3-table__nowrap">{VISIBILITY_LABELS[alert.visibility]}</td>
+                    <td>
+                      <RichText html={alert.body_html} lines={2} />
+                    </td>
+                    <td>{alert.created_by_name ?? '—'}</td>
+                    <td className="m3-table__nowrap">{formatDateTime(alert.created_at)}</td>
+                    <td>
+                      <div className="admin__actions">
+                        <button type="button" className="admin__action" onClick={() => setEditing(alert)}>
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="admin__action admin__action--danger"
+                          onClick={() => void run(() => apiFetch(`/alerts/${alert.id}`, { method: 'DELETE' }), 'Alert deleted.')}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {editing && (
+        <Dialog title={`Edit alert #${editing.id}`} onClose={() => setEditing(null)}>
+          <AlertEditor
+            initial={{ type: editing.type, visibility: editing.visibility, body_html: editing.body_html }}
+            submitLabel="Save"
+            onSubmit={async (values) => {
+              const target = editing;
+              setEditing(null);
+              await run(
+                () => apiFetch(`/alerts/${target.id}`, { method: 'PUT', body: JSON.stringify(values) }),
+                'Alert updated.',
+              );
+            }}
+          />
         </Dialog>
       )}
     </>

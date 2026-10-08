@@ -1,0 +1,75 @@
+// Pinned to the top while scrolling, just under the (also sticky) masquerade
+// banner when it's showing — MasqueradeBanner publishes its height.
+.dashboard-alert-banners {
+  position: sticky;
+  top: var(--masquerade-banner-height, 0px);
+  z-index: 1000;
+}
+
+// Same shape as .masquerade-banner, in light tints colored by alert type.
+.dashboard-alert-banner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 8px 10px 16px;
+  font-size: 14px;
+  text-align: left;
+  color: #174ea6;
+  background: #e8f0fe;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+
+  a {
+    color: inherit;
+    font-weight: 500;
+  }
+
+  &--success {
+    color: #0d652d;
+    background: #e6f4ea;
+  }
+
+  &--warning {
+    color: #8a4b00;
+    background: #fef7e0;
+  }
+
+  &--danger {
+    color: #a50e0e;
+    background: #fce8e6;
+  }
+}
+
+.dashboard-alert-banner__body {
+  flex: 1;
+  min-width: 0;
+
+  > * {
+    margin: 0;
+  }
+
+  > * + * {
+    margin-top: 4px;
+  }
+}
+
+.dashboard-alert-banner__close {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  font-size: 22px;
+  line-height: 1;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+
+  &:hover {
+    background: color-mix(in srgb, currentColor 12%, transparent);
+  }
+
+  &:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
+}

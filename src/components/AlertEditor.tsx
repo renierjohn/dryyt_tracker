@@ -7,14 +7,13 @@ import '../assets/sass/alert-editor.scss';
 
 export interface AlertFormValues {
   type: 'info' | 'success' | 'warning' | 'danger';
-  visibility: 'dashboard' | 'public' | 'both';
+  visibility: 'dashboard' | 'public';
   body_html: string;
 }
 
 const VISIBILITY_LABELS: Record<AlertFormValues['visibility'], string> = {
   dashboard: 'Dashboard only',
   public: 'Public only',
-  both: 'Both',
 };
 const ALL_VISIBILITIES = Object.keys(VISIBILITY_LABELS) as AlertFormValues['visibility'][];
 

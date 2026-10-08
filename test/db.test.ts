@@ -179,11 +179,11 @@ describe('alerts CRUD', () => {
     });
     await createAlert(env.DB, { userId: user.id, createdBy: user.id, type: 'info', visibility: 'dashboard', bodyHtml: '<p>a</p>' });
     await createAlert(env.DB, { userId: user.id, createdBy: user.id, type: 'warning', visibility: 'public', bodyHtml: '<p>b</p>' });
-    await createAlert(env.DB, { userId: user.id, createdBy: user.id, type: 'danger', visibility: 'both', bodyHtml: '<p>c</p>' });
+    await createAlert(env.DB, { userId: user.id, createdBy: user.id, type: 'danger', visibility: 'public', bodyHtml: '<p>c</p>' });
 
     const publicAlerts = await getPublicAlertsForUser(env.DB, user.id);
     expect(publicAlerts).toHaveLength(2);
-    expect(publicAlerts.map((a) => a.visibility).sort()).toEqual(['both', 'public']);
+    expect(publicAlerts.map((a) => a.visibility)).toEqual(['public', 'public']);
   });
 
   it('gets a single alert by id, or null if missing', async () => {

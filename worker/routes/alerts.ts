@@ -10,7 +10,7 @@ export const alertRoutes = new Hono<AppBindings>();
 alertRoutes.use('*', requireAuth);
 
 const ALERT_TYPES = new Set(['info', 'success', 'warning', 'danger']);
-const ALERT_VISIBILITIES = new Set(['dashboard', 'public', 'both']);
+const ALERT_VISIBILITIES = new Set(['dashboard', 'public']);
 
 function canManageAlert(user: AuthUser, alert: DbAlert): boolean {
   if (alert.user_id === user.id) return true;

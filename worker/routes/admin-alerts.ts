@@ -13,7 +13,7 @@ export const adminAlertsRoutes = new Hono<AppBindings>();
 adminAlertsRoutes.use('*', requireRole('admin', 'owner', 'superadmin'));
 
 const ALERT_TYPES = new Set(['info', 'success', 'warning', 'danger']);
-const ALERT_VISIBILITIES = new Set(['dashboard', 'public', 'both']);
+const ALERT_VISIBILITIES = new Set(['dashboard', 'public']);
 
 // Suggestions for the "Target user" field: an owner's own customers, or every
 // active user for admin/superadmin.

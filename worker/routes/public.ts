@@ -23,7 +23,7 @@ publicRoutes.get('/owners', async (c) => {
 });
 
 // An owner's public store details, contact info, social media links and public alerts (visibility
-// 'public' or 'both'; body_html is sanitized on write), for their
+// 'public'; body_html is sanitized on write), for their
 // /owner/:identifier page.
 publicRoutes.get('/owners/:identifier/store', async (c) => {
   const owner = await getActiveOwnerByIdentifier(c.env.DB, c.req.param('identifier'));

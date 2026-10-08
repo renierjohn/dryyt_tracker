@@ -90,7 +90,7 @@ describe('PUT/DELETE /api/alerts/:id ownership', () => {
     const plainMe = (await (await req('GET', '/api/auth/me', undefined, plainCookie)).json()) as { user: { id: number } };
 
     const createRes = await req('POST', `/api/admin/users/${plainMe.user.id}/alerts`, {
-      type: 'info', visibility: 'both', body_html: '<p>sent to plain user</p>',
+      type: 'info', visibility: 'dashboard', body_html: '<p>sent to plain user</p>',
     }, superadminCookie);
     const id = (await createRes.json() as { alert: { id: number } }).alert.id;
 

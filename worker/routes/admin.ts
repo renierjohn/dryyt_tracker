@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { getUserById, searchUsersWithRoles, userStats, updateUserAdminFields, setUserActive, getUserByEmail, getRoleById, listRoles, createUser, deleteSessionsForUser, listSessions, deleteExpiredSessions, deleteSessionsByIds } from '../db';
+import { getUserById, searchUsersWithRoles, userStats, updateUserAdminFields, setUserActive, getUserByEmail, getRoleById, listRoles, createUser, deleteSessionsForUser, listSessions, deleteExpiredSessions, deleteSessionsByIds, listAllAlerts } from '../db';
 import { getCookie } from 'hono/cookie';
 import { requireRole, SESSION_COOKIE, startMasquerade } from '../middleware/auth';
 import { hashPassword } from '../crypto';
@@ -54,6 +54,12 @@ adminRoutes.get('/sessions', async (c) => {
 // clears the rows out.
 adminRoutes.delete('/sessions/expired', async (c) => {
   return c.json({ deleted: await deleteExpiredSessions(c.env.DB) });
+});
+
+// All users' alerts. Edit/delete go through /api/alerts/:id, which already
+// lets the superadmin manage any alert.
+adminRoutes.get('/alerts', async (c) => {
+  return c.json({ alerts: await listAllAlerts(c.env.DB) });
 });
 
 // Body: { ids: number[] } (display ids from GET /sessions). The caller's own

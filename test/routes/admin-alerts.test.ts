@@ -18,7 +18,7 @@ describe('POST /api/admin/users/:id/alerts', () => {
     const targetId = targetMe.user.id;
 
     const res = await req('POST', `/api/admin/users/${targetId}/alerts`, {
-      type: 'warning', visibility: 'both', body_html: '<p>heads up</p>',
+      type: 'warning', visibility: 'dashboard', body_html: '<p>heads up</p>',
     }, superadminCookie);
     expect(res.status).toBe(201);
     const body = (await res.json()) as { alert: { id: number; user_id: number; created_by: number } };

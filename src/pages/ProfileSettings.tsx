@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { AuthUser } from '../lib/useCurrentUser';
 import { apiFetch, ApiError } from '../lib/api';
-import { canSendAlerts, isCustomer, isOwner } from '../lib/permissions';
+import { canSendAlerts, isOwner } from '../lib/permissions';
 import { Icon } from '../components/AppShell';
 import AlertEditor, { type AlertFormValues } from '../components/AlertEditor';
+import Dialog from '../components/Dialog';
+import RichText from '../components/RichText';
 import '../assets/sass/dashboard.scss';
 import {
   MAX_SOCIAL_LINKS,
@@ -12,6 +14,10 @@ import {
   type SocialLink,
   type SocialPlatform,
 } from '../lib/socialLinks';
+
+// D1's datetime('now') is UTC without a zone suffix.
+const formatDateTime = (value: string) =>
+  new Date(value.replace(' ', 'T') + 'Z').toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
 
 // A new row starts on the first platform not already listed.
 const nextPlatform = (links: SocialLink[]) =>
@@ -22,6 +28,7 @@ interface Alert {
   type: AlertFormValues['type'];
   visibility: AlertFormValues['visibility'];
   body_html: string;
+  created_at: string;
 }
 
 export default function ProfileSettings({ user, refresh }: { user: AuthUser; refresh: () => Promise<void> }) {
@@ -354,13 +361,14 @@ function PasswordForm() {
 
 export function AlertsPanel({ user }: { user: AuthUser }) {
   const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editing, setEditing] = useState<Alert | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function loadAlerts() {
     try {
       const body = await apiFetch<{ alerts: Alert[] }>('/alerts');
-      setAlerts(body.alerts);
+      // Dashboard-only alerts show as banners above the page (DashboardAlertBanners).
+      setAlerts(body.alerts.filter((a) => a.visibility !== 'dashboard'));
     } catch (err) {
       setError(err instanceof ApiError ? err.code : 'unknown_error');
     }
@@ -389,7 +397,7 @@ export function AlertsPanel({ user }: { user: AuthUser }) {
   async function handleUpdate(id: number, values: AlertFormValues) {
     try {
       await apiFetch(`/alerts/${id}`, { method: 'PUT', body: JSON.stringify(values) });
-      setEditingId(null);
+      setEditing(null);
       await loadAlerts();
     } catch (err) {
       setError(err instanceof ApiError ? err.code : 'unknown_error');
@@ -416,38 +424,53 @@ export function AlertsPanel({ user }: { user: AuthUser }) {
         </>
       )}
       <h3>Your alerts</h3>
-      <ul className="dashboard__alert-list">
-        {alerts.map((alert) => (
-          // Customers see the alert formatted by type (as on the public page),
-          // without the raw [type/visibility] tag.
-          <li
-            key={alert.id}
-            className={isCustomer(user) ? `m3-alert m3-alert--${alert.type}` : 'dashboard__alert-item'}
-          >
-            {canSendAlerts(user) && editingId === alert.id ? (
-              <AlertEditor
-                visibilityOptions={['public']}
-                initial={{ type: alert.type, visibility: alert.visibility, body_html: alert.body_html }}
-                submitLabel="Save"
-                onSubmit={(values) => handleUpdate(alert.id, values)}
-              />
-            ) : (
-              <>
-                {!isCustomer(user) && (
-                  <span className="dashboard__alert-tag">[{alert.type}/{alert.visibility}]</span>
-                )}
-                <div dangerouslySetInnerHTML={{ __html: alert.body_html }} />
-                <div className="dashboard__alert-actions">
-                  {canSendAlerts(user) && (
-                    <button className="dashboard__button" onClick={() => setEditingId(alert.id)}>Edit</button>
-                  )}
-                  <button className="dashboard__button" onClick={() => handleDelete(alert.id)}>Delete</button>
-                </div>
-              </>
-            )}
-          </li>
-        ))}
-      </ul>
+      {alerts.length === 0 ? (
+        <p className="dashboard__hint">No alerts.</p>
+      ) : (
+        <div className="dashboard__table-wrap">
+          <table className="dashboard__table">
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Message</th>
+                <th>Created</th>
+                <th aria-label="Actions" />
+              </tr>
+            </thead>
+            <tbody>
+              {alerts.map((alert) => (
+                <tr key={alert.id}>
+                  <td>
+                    <span className={`dashboard__alert-type dashboard__alert-type--${alert.type}`}>{alert.type}</span>
+                  </td>
+                  <td>
+                    <RichText html={alert.body_html} lines={2} />
+                  </td>
+                  <td className="dashboard__nowrap">{formatDateTime(alert.created_at)}</td>
+                  <td>
+                    <div className="dashboard__alert-actions">
+                      {canSendAlerts(user) && (
+                        <button className="dashboard__button" onClick={() => setEditing(alert)}>Edit</button>
+                      )}
+                      <button className="dashboard__button" onClick={() => handleDelete(alert.id)}>Delete</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {editing && (
+        <Dialog title="Edit alert" onClose={() => setEditing(null)}>
+          <AlertEditor
+            visibilityOptions={['public']}
+            initial={{ type: editing.type, visibility: editing.visibility, body_html: editing.body_html }}
+            submitLabel="Save"
+            onSubmit={(values) => handleUpdate(editing.id, values)}
+          />
+        </Dialog>
+      )}
     </section>
   );
 }

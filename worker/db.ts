@@ -509,7 +509,7 @@ export interface DbAlert {
   user_id: number;
   created_by: number;
   type: 'info' | 'success' | 'warning' | 'danger';
-  visibility: 'dashboard' | 'public' | 'both';
+  visibility: 'dashboard' | 'public';
   body_html: string;
   created_at: string;
   updated_at: string;
@@ -543,10 +543,30 @@ export async function getAlertsForUser(db: D1Database, userId: number): Promise<
   return results;
 }
 
+export interface AdminAlertRow extends DbAlert {
+  user_name: string;
+  user_email: string;
+  created_by_name: string | null;
+}
+
+// Every user's alerts for the superadmin's Alerts tab, newest first.
+export async function listAllAlerts(db: D1Database): Promise<AdminAlertRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT a.*, u.display_name AS user_name, u.email AS user_email, c.display_name AS created_by_name
+       FROM alerts a
+       JOIN users u ON u.id = a.user_id
+       LEFT JOIN users c ON c.id = a.created_by
+       ORDER BY a.created_at DESC, a.id DESC`,
+    )
+    .all<AdminAlertRow>();
+  return results;
+}
+
 export async function getPublicAlertsForUser(db: D1Database, userId: number): Promise<DbAlert[]> {
   const { results } = await db
     .prepare(
-      `SELECT * FROM alerts WHERE user_id = ? AND visibility IN ('public', 'both') ORDER BY created_at DESC`,
+      `SELECT * FROM alerts WHERE user_id = ? AND visibility = 'public' ORDER BY created_at DESC`,
     )
     .bind(userId)
     .all<DbAlert>();

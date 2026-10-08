@@ -591,6 +591,39 @@
     }
   }
 
+  // Alert type chip (Alerts tables), same palette as .m3-alert.
+  .dashboard__alert-type {
+    display: inline-block;
+    padding: 2px 10px;
+    font: 500 12px/18px var(--m3-font);
+    text-transform: capitalize;
+    border-radius: 8px;
+
+    &--info {
+      color: #174ea6;
+      background: #e8f0fe;
+    }
+
+    &--success {
+      color: #0d652d;
+      background: #e6f4ea;
+    }
+
+    &--warning {
+      color: #8a4b00;
+      background: #fef7e0;
+    }
+
+    &--danger {
+      color: #a50e0e;
+      background: #fce8e6;
+    }
+  }
+
+  .dashboard__nowrap {
+    white-space: nowrap;
+  }
+
   .dashboard__alert-item {
     padding: 12px 16px;
     border: 0;
