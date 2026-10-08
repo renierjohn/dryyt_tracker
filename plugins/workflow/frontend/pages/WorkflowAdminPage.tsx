@@ -66,7 +66,9 @@ export default function WorkflowAdminPage() {
 
 function AdminView() {
   const { user, refresh } = useSession();
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  // Every status section starts collapsed and loads on first expand: the open
+  // statuses share one request, "End" pages on its own. null = not loaded yet.
+  const [transactions, setTransactions] = useState<Transaction[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastCode, setLastCode] = useState<string | null>(null);
   const [openTransaction, setOpenTransaction] = useState<Transaction | null>(null);
@@ -98,15 +100,10 @@ function AdminView() {
     }
   }
 
+  // Refreshes only the sections that have been loaded.
   async function loadTransactions() {
-    await Promise.all([loadOpen(), loadEnded(endedPage)]);
+    await Promise.all([transactions !== null && loadOpen(), ended !== null && loadEnded(endedPage)]);
   }
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadOpen();
-    void loadEnded(1);
-  }, []);
 
   async function handleStatusChange(id: number, status: string) {
     try {
@@ -144,15 +141,17 @@ function AdminView() {
         )}
         {STATUSES.map((status) => {
           const isEnd = status === 'end';
-          const rows = isEnd ? (ended?.transactions ?? []) : transactions.filter((t) => t.status === status);
-          const count = isEnd ? (ended?.total ?? 0) : rows.length;
+          const rows = isEnd ? (ended?.transactions ?? null) : (transactions?.filter((t) => t.status === status) ?? null);
+          const count = isEnd ? ended?.total : rows?.length;
           return (
             <TransactionsTable
               key={status}
               status={status}
-              title={`${STATUS_LABELS[status]} (${count})`}
+              title={count === undefined ? STATUS_LABELS[status] : `${STATUS_LABELS[status]} (${count})`}
               empty="None."
-              defaultOpen={status === 'hold'}
+              onExpand={() => {
+                if (isEnd ? ended === null : transactions === null) void (isEnd ? loadEnded(1) : loadOpen());
+              }}
               transactions={rows}
               onStatusChange={handleStatusChange}
               onOpen={setOpenTransaction}
@@ -178,14 +177,13 @@ function AdminView() {
 }
 
 // One collapsible card of the owner's transactions table — the page renders
-// one per status, in STATUS_LABELS order, with only "On hold" open at first.
-// `open` is only the initial state: React leaves the attribute alone after a
-// user toggles it, since the prop never changes.
+// one per status, in STATUS_LABELS order, all collapsed at first. onExpand
+// fires each time it's opened; transactions is null until loaded.
 function TransactionsTable({
   status,
   title,
   empty,
-  defaultOpen,
+  onExpand,
   footer,
   transactions,
   onStatusChange,
@@ -194,14 +192,14 @@ function TransactionsTable({
   status: string;
   title: string;
   empty: string;
-  defaultOpen: boolean;
+  onExpand: () => void;
   footer?: ReactNode;
-  transactions: Transaction[];
+  transactions: Transaction[] | null;
   onStatusChange: (id: number, status: string) => void;
   onOpen: (transaction: Transaction) => void;
 }) {
   return (
-    <details className="m3-card m3-card--flush m3-collapsible" open={defaultOpen}>
+    <details className="m3-card m3-card--flush m3-collapsible" onToggle={(e) => e.currentTarget.open && onExpand()}>
       <summary className="m3-card__title">
         <span className="workflow-section-title">
           <span className={`workflow-section-icon workflow-section-icon--${status}`}>
@@ -210,7 +208,9 @@ function TransactionsTable({
           {title}
         </span>
       </summary>
-      {transactions.length === 0 ? (
+      {transactions === null ? (
+        <p className="m3-supporting" style={{ margin: '0 20px 12px' }}>Loading…</p>
+      ) : transactions.length === 0 ? (
         <p className="m3-supporting" style={{ margin: '0 20px 12px' }}>{empty}</p>
       ) : (
         <div className="m3-table-wrap">
@@ -399,6 +399,9 @@ function RegisterTransactionForm({ onCreated }: { onCreated: (code: string) => P
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerContact, setCustomerContact] = useState('');
   const [customers, setCustomers] = useState<Customer[]>([]);
+  // Customers load lazily, on focusing the customer name field; cleared after
+  // registering a new customer so the next focus picks them up.
+  const customersLoaded = useRef(false);
   const [description, setDescription] = useState('');
   const [weight, setWeight] = useState('');
   const [controlNumber, setControlNumber] = useState('');
@@ -412,10 +415,13 @@ function RegisterTransactionForm({ onCreated }: { onCreated: (code: string) => P
   const { user } = useSession();
 
   async function loadCustomers() {
+    if (customersLoaded.current) return;
+    customersLoaded.current = true;
     try {
       const body = await apiFetch<{ customers: Customer[] }>('/plugins/workflow/customers');
       setCustomers(body.customers);
     } catch (err) {
+      customersLoaded.current = false;
       console.error('Loading customers failed', err);
     }
   }
@@ -431,7 +437,6 @@ function RegisterTransactionForm({ onCreated }: { onCreated: (code: string) => P
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadCustomers();
     void loadNextControlNumber();
   }, []);
 
@@ -527,7 +532,7 @@ function RegisterTransactionForm({ onCreated }: { onCreated: (code: string) => P
       setPrintedCode(null);
       setPrinted(false);
       void loadNextControlNumber();
-      if (customerContact.trim() || customerEmail) void loadCustomers();
+      if (customerContact.trim() || customerEmail) customersLoaded.current = false;
       await onCreated(body.transaction.code);
     } catch (err) {
       setError(
@@ -552,6 +557,7 @@ function RegisterTransactionForm({ onCreated }: { onCreated: (code: string) => P
           <Autocomplete
             value={customerName}
             onChange={handleCustomerNameChange}
+            onFocus={() => void loadCustomers()}
             options={customers.map((c) => ({ id: c.id, value: customerLabel(c), label: c.display_name, detail: c.contact_number }))}
             required
           />

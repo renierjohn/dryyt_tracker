@@ -9,9 +9,11 @@ describe('CORS on /api/*', () => {
     expect(res.headers.get('Vary')).toContain('Origin');
   });
 
-  it('sends no Allow-Origin for an unlisted Origin', async () => {
+  it('sends the first configured domain for an unlisted or missing Origin', async () => {
     const res = await SELF.fetch('https://example.com/api/health', { headers: { Origin: 'https://evil.example' } });
-    expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://allowed.example');
+    const noOrigin = await SELF.fetch('https://example.com/api/health');
+    expect(noOrigin.headers.get('Access-Control-Allow-Origin')).toBe('https://allowed.example');
   });
 
   it('answers preflight before auth', async () => {

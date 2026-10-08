@@ -1,14 +1,18 @@
 import { cors } from 'hono/cors';
 import type { AppBindings } from '../types';
 
-// CORS for /api/*: Access-Control-Allow-Origin echoes the request's Origin when
-// it's listed in CORS_ORIGINS (comma-separated, e.g.
-// "https://dryyt.com,https://www.dryyt.com"); any other origin gets no CORS
-// headers. Credentials are allowed so the session cookie works cross-origin.
+// CORS for /api/*, from wrangler.jsonc's CORS_ORIGINS var (comma-separated,
+// e.g. "https://dryyt.com,https://www.dryyt.com"). Every response carries
+// Access-Control-Allow-Origin: the request's Origin when it's listed, else the
+// first listed domain (which the browser then rejects for any other origin).
+// Credentials are allowed so the session cookie works cross-origin.
 export const apiCors = cors({
   origin: (origin, c) => {
-    const allowed = (c.env as AppBindings['Bindings']).CORS_ORIGINS?.split(',').map((o) => o.trim()) ?? [];
-    return allowed.includes(origin) ? origin : null;
+    const allowed = ((c.env as AppBindings['Bindings']).CORS_ORIGINS ?? '')
+      .split(',')
+      .map((o) => o.trim())
+      .filter(Boolean);
+    return allowed.includes(origin) ? origin : (allowed[0] ?? null);
   },
   credentials: true,
 });

@@ -117,7 +117,7 @@ export default function ScanPickupPage() {
 
   return (
     <AppShell active="scan" user={user} refresh={refresh} contentClassName="m3-page">
-      <h1 className="m3-headline">Scan pickup</h1>
+      <p className="m3-supporting">Scan the QR code to End Transaction.</p>
       <section className="scan-pickup">
         {error && <p className="m3-banner m3-banner--error" role="alert">{error}</p>}
         <div className="scan-pickup__viewport">
