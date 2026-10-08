@@ -6,6 +6,7 @@ import { Icon } from '../components/AppShell';
 import AlertEditor, { type AlertFormValues } from '../components/AlertEditor';
 import Dialog from '../components/Dialog';
 import RichText from '../components/RichText';
+import ScrollHintWrap from '../components/ScrollHintWrap';
 import '../assets/sass/dashboard.scss';
 import {
   MAX_SOCIAL_LINKS,
@@ -427,7 +428,7 @@ export function AlertsPanel({ user }: { user: AuthUser }) {
       {alerts.length === 0 ? (
         <p className="dashboard__hint">No alerts.</p>
       ) : (
-        <div className="dashboard__table-wrap">
+        <ScrollHintWrap className="dashboard__table-wrap">
           <table className="dashboard__table">
             <thead>
               <tr>
@@ -459,7 +460,7 @@ export function AlertsPanel({ user }: { user: AuthUser }) {
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollHintWrap>
       )}
       {editing && (
         <Dialog title="Edit alert" onClose={() => setEditing(null)}>

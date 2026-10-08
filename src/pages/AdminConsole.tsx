@@ -7,6 +7,7 @@ import Dialog from '../components/Dialog';
 import RichText from '../components/RichText';
 import type { AuthUser } from '../lib/useCurrentUser';
 import ProfileSettings from './ProfileSettings';
+import ScrollHintWrap from '../components/ScrollHintWrap';
 import '../assets/sass/dashboard.scss';
 import '../assets/sass/admin-console.scss';
 
@@ -303,7 +304,7 @@ export default function AdminConsole({ user, refresh }: { user: AuthUser; refres
               ) : users.length === 0 ? (
                 <p className="m3-supporting admin__empty">No users match.</p>
               ) : (
-                <div className="m3-table-wrap">
+                <ScrollHintWrap>
                   <table className="m3-table admin__table">
                     <thead>
                       <tr>
@@ -379,7 +380,7 @@ export default function AdminConsole({ user, refresh }: { user: AuthUser; refres
                       ))}
                     </tbody>
                   </table>
-                </div>
+                </ScrollHintWrap>
               )}
               <Pagination {...userList} label="Users pages" />
             </div>
@@ -563,7 +564,7 @@ function TransactionsPanel() {
         ) : transactions.length === 0 ? (
           <p className="m3-supporting admin__empty">No transactions match.</p>
         ) : (
-          <div className="m3-table-wrap">
+          <ScrollHintWrap>
             <table className="m3-table admin__table">
               <thead>
                 <tr>
@@ -613,7 +614,7 @@ function TransactionsPanel() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </ScrollHintWrap>
         )}
         <Pagination {...list} label="Transactions pages" />
       </div>
@@ -730,7 +731,7 @@ function AllAlertsPanel() {
         ) : alerts.length === 0 ? (
           <p className="m3-supporting admin__empty">No alerts.</p>
         ) : (
-          <div className="m3-table-wrap">
+          <ScrollHintWrap>
             <table className="m3-table admin__table">
               <thead>
                 <tr>
@@ -781,7 +782,7 @@ function AllAlertsPanel() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </ScrollHintWrap>
         )}
       </div>
 
@@ -1019,7 +1020,7 @@ function SessionsTable({
   const checkedCount = sessions.filter((s) => selected.has(s.id)).length;
   return (
     <>
-      <div className="m3-table-wrap">
+      <ScrollHintWrap>
         <table className="m3-table admin__table">
           <thead>
             <tr>
@@ -1066,7 +1067,7 @@ function SessionsTable({
             ))}
           </tbody>
         </table>
-      </div>
+      </ScrollHintWrap>
       {total !== undefined && total > sessions.length && (
         <p className="m3-supporting admin__empty">Showing the newest {sessions.length} of {total}.</p>
       )}

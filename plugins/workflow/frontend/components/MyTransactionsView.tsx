@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { apiFetch, ApiError, useSession, AppShell, RichText } from '../../../sdk';
+import { apiFetch, ApiError, useSession, AppShell, RichText, ScrollHintWrap } from '../../../sdk';
 import TransactionDialog from './TransactionDialog';
 import { STATUS_LABELS } from '../status';
 import { formatDateTime } from '../datetime';
@@ -45,7 +45,7 @@ export default function MyTransactionsView() {
           {transactions.length === 0 ? (
             <p className="m3-supporting" style={{ margin: '0 20px 12px' }}>No transactions yet.</p>
           ) : (
-            <div className="m3-table-wrap">
+            <ScrollHintWrap>
               <table className="m3-table">
                 <thead>
                   <tr>
@@ -93,7 +93,7 @@ export default function MyTransactionsView() {
                   </tr>
                 </tfoot>
               </table>
-            </div>
+            </ScrollHintWrap>
           )}
         </div>
       </section>

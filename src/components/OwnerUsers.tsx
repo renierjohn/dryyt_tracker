@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { apiFetch, ApiError } from '../lib/api';
 import { CONTACT_ERROR, isInvalidContact } from '../lib/contact';
 import Dialog from './Dialog';
+import ScrollHintWrap from './ScrollHintWrap';
 import '../assets/sass/dashboard.scss';
 
 function errorMessage(err: unknown): string {
@@ -86,7 +87,7 @@ export default function OwnerUsers() {
       <section className="dashboard__section">
         <h2>Your customers</h2>
         {error && <p role="alert">{error}</p>}
-        <div className="dashboard__table-wrap">
+        <ScrollHintWrap className="dashboard__table-wrap">
           <table className="dashboard__table">
             <thead>
               <tr>
@@ -135,7 +136,7 @@ export default function OwnerUsers() {
               )}
             </tbody>
           </table>
-        </div>
+        </ScrollHintWrap>
         {total > 0 && (
           <nav className="dashboard__pagination" aria-label="Customers pages">
             <span>
@@ -203,7 +204,7 @@ function TransactionsDialog({ user, onClose }: { user: ChildUser; onClose: () =>
       ) : transactions.length === 0 ? (
         <p>No transactions yet.</p>
       ) : (
-        <div className="dashboard__table-wrap">
+        <ScrollHintWrap className="dashboard__table-wrap">
           <table className="dashboard__table">
             <thead>
               <tr>
@@ -237,7 +238,7 @@ function TransactionsDialog({ user, onClose }: { user: ChildUser; onClose: () =>
               </tr>
             </tfoot>
           </table>
-        </div>
+        </ScrollHintWrap>
       )}
     </Dialog>
   );

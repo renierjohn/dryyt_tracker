@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { apiFetch, ApiError, useSession, AppShell, RichText, StoreInfo, SocialLinks, type SocialLink, type StoreDetails } from '../../../sdk';
+import { apiFetch, ApiError, useSession, AppShell, RichText, ScrollHintWrap, StoreInfo, SocialLinks, type SocialLink, type StoreDetails } from '../../../sdk';
 import { formatDateTime } from '../datetime';
 import WorkflowAdminPage from './WorkflowAdminPage';
 import TransactionDialog from '../components/TransactionDialog';
@@ -201,7 +201,7 @@ export default function PublicWorkflowPage() {
           {transactions.length === 0 ? (
             <p className="m3-supporting" style={{ margin: '0 20px 12px' }}>No transactions yet.</p>
           ) : (
-            <div className="m3-table-wrap">
+            <ScrollHintWrap>
               <table className="m3-table">
                 <thead>
                   <tr>
@@ -243,7 +243,7 @@ export default function PublicWorkflowPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </ScrollHintWrap>
           )}
         </div>
       </section>

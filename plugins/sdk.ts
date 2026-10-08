@@ -15,6 +15,7 @@ export { default as SocialLinks } from '../src/components/SocialLinks';
 export type { SocialLink } from '../src/lib/socialLinks';
 export type { RichTextEditorInstance } from '../src/components/RichTextEditor';
 export { default as RichText } from '../src/components/RichText';
+export { default as ScrollHintWrap } from '../src/components/ScrollHintWrap';
 export { default as Autocomplete, type AutocompleteOption } from '../src/components/Autocomplete';
 export { CONTACT_ERROR, isInvalidContact } from '../src/lib/contact';
 export type { StoreDetails } from '../src/lib/store';

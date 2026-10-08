@@ -561,6 +561,15 @@
     overflow-x: auto;
   }
 
+  // ScrollHintWrap: shown above a table that overflows to the right.
+  .m3-scroll-hint {
+    margin: 0 20px 4px;
+    font-size: 12px;
+    line-height: 16px;
+    text-align: right;
+    color: var(--m3-on-surface-variant);
+  }
+
   .m3-table {
     width: 100%;
     min-width: 560px;

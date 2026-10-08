@@ -8,6 +8,7 @@ import {
   Icon,
   RichText,
   RichTextEditor,
+  ScrollHintWrap,
   type IconName,
   hasPermission,
   CONTACT_ERROR,
@@ -213,7 +214,7 @@ function TransactionsTable({
       ) : transactions.length === 0 ? (
         <p className="m3-supporting" style={{ margin: '0 20px 12px' }}>{empty}</p>
       ) : (
-        <div className="m3-table-wrap">
+        <ScrollHintWrap>
           <table className="m3-table">
             <thead>
               <tr>
@@ -261,7 +262,7 @@ function TransactionsTable({
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollHintWrap>
       )}
       {footer}
     </details>
