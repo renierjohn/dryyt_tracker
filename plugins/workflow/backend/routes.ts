@@ -290,7 +290,7 @@ workflowRoutes.get('/transactions/export', requirePermission('manage_users'), as
   const { results } = await c.env.DB
     .prepare(
       `SELECT t.control_number, t.code, t.customer_name, t.customer_contact, u.email AS customer_email,
-              t.status, t.created_at, t.done_at
+              t.weight_kg, t.status, t.created_at, t.done_at
        FROM workflow_transactions t
        LEFT JOIN users u ON u.id = t.customer_user_id
        WHERE t.created_by = ? ORDER BY t.created_at ASC, t.id ASC`,

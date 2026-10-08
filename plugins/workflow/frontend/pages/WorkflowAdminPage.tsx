@@ -275,12 +275,13 @@ interface ExportRow {
   customer_name: string;
   customer_contact: string | null;
   customer_email: string | null;
+  weight_kg: number | null;
   status: string;
   created_at: string;
   done_at: string | null;
 }
 
-const REPORT_HEADER = ['Control Number', 'Code', 'Name', 'Phone', 'Email', 'Status', 'Date Started', 'Date Ended'];
+const REPORT_HEADER = ['Control Number', 'Code', 'Name', 'Phone', 'Email', 'Weight (kg)', 'Status', 'Date Started', 'Date Ended'];
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const localDay = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -309,6 +310,7 @@ function DownloadReportDialog({ onClose }: { onClose: () => void }) {
         t.customer_name,
         t.customer_contact,
         t.customer_email,
+        t.weight_kg === null ? null : String(t.weight_kg),
         STATUS_LABELS[t.status] ?? t.status,
         reportDate(t.created_at),
         reportDate(t.done_at),

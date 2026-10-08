@@ -83,7 +83,7 @@ describe('POST /api/plugins/workflow/transactions', () => {
   it("exports all of the owner's transactions with the linked customer's email", async () => {
     const owner = await createUserWithRoleAndLogin('workflow-export@example.com', await getAdminRoleId(), 'Admin');
     const other = await createUserWithRoleAndLogin('workflow-export-other@example.com', await getAdminRoleId(), 'Admin2');
-    await req('POST', '/api/plugins/workflow/transactions', { customer_name: 'First', customer_contact: '09175550001' }, owner);
+    await req('POST', '/api/plugins/workflow/transactions', { customer_name: 'First', customer_contact: '09175550001', weight_kg: 3.5 }, owner);
     await req('POST', '/api/plugins/workflow/transactions', { customer_name: 'Walk-in' }, owner);
     await req('POST', '/api/plugins/workflow/transactions', { customer_name: 'Not mine' }, other);
 
@@ -92,9 +92,9 @@ describe('POST /api/plugins/workflow/transactions', () => {
     const { transactions } = (await res.json()) as { transactions: Array<Record<string, unknown>> };
     expect(transactions).toEqual([
       expect.objectContaining({
-        control_number: '000001', customer_name: 'First', customer_contact: '09175550001', customer_email: 'first@dryyt.com', status: 'hold', done_at: null,
+        control_number: '000001', customer_name: 'First', customer_contact: '09175550001', customer_email: 'first@dryyt.com', weight_kg: 3.5, status: 'hold', done_at: null,
       }),
-      expect.objectContaining({ control_number: '000002', customer_name: 'Walk-in', customer_contact: null, customer_email: null }),
+      expect.objectContaining({ control_number: '000002', customer_name: 'Walk-in', customer_contact: null, customer_email: null, weight_kg: null }),
     ]);
     expect((await req('GET', '/api/plugins/workflow/transactions/export')).status).toBe(401);
   });
