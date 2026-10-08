@@ -550,6 +550,24 @@ describe('GET /api/plugins/workflow/transactions by status', () => {
   });
 });
 
+describe('GET /api/plugins/workflow/transactions/counts', () => {
+  it("counts the owner's own transactions per status", async () => {
+    const ownerCookie = await createUserWithRoleAndLogin('workflow-counts@example.com', await getOwnerRoleId(), 'Owner');
+    const otherCookie = await createUserWithRoleAndLogin('workflow-counts-other@example.com', await getOwnerRoleId(), 'Other');
+    await req('POST', '/api/plugins/workflow/transactions', { customer_name: 'Not mine' }, otherCookie);
+    const ids: number[] = [];
+    for (let i = 0; i < 3; i++) {
+      const res = await req('POST', '/api/plugins/workflow/transactions', { customer_name: `Count ${i}` }, ownerCookie);
+      ids.push(((await res.json()) as { transaction: { id: number } }).transaction.id);
+    }
+    await req('PUT', `/api/plugins/workflow/transactions/${ids[0]}/status`, { status: 'end' }, ownerCookie);
+
+    const res = await req('GET', '/api/plugins/workflow/transactions/counts', undefined, ownerCookie);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ counts: { hold: 2, end: 1 } });
+  });
+});
+
 describe('POST /api/plugins/workflow/pickup', () => {
   async function setup(email: string) {
     const ownerCookie = await createUserWithRoleAndLogin(email, await getOwnerRoleId(), 'Owner');

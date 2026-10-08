@@ -300,6 +300,16 @@ workflowRoutes.get('/transactions/export', requirePermission('manage_users'), as
   return c.json({ transactions: results });
 });
 
+// How many of the owner's transactions are in each status, for the Tracker's
+// section headers before any section is expanded. Statuses with none are left out.
+workflowRoutes.get('/transactions/counts', requirePermission('manage_users'), async (c) => {
+  const { results } = await c.env.DB
+    .prepare('SELECT status, COUNT(*) AS n FROM workflow_transactions WHERE created_by = ? GROUP BY status')
+    .bind(c.get('user')!.id)
+    .all<{ status: string; n: number }>();
+  return c.json({ counts: Object.fromEntries(results.map((r) => [r.status, r.n])) });
+});
+
 // An unused code, for a slip printed before the transaction is registered;
 // the form then registers with it. Not reserved — registering with a code
 // that got taken in between fails with duplicate_code.

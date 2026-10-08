@@ -16,6 +16,7 @@ import {
   type RichTextEditorInstance,
 } from '../../../sdk';
 import TransactionDialog from '../components/TransactionDialog';
+import TrackQrDialog from '../components/TrackQrDialog';
 import MyTransactionsView from '../components/MyTransactionsView';
 import '../workflow.scss';
 import { formatDateTime } from '../datetime';
@@ -73,11 +74,29 @@ function AdminView() {
   const [error, setError] = useState<string | null>(null);
   const [lastCode, setLastCode] = useState<string | null>(null);
   const [openTransaction, setOpenTransaction] = useState<Transaction | null>(null);
+  const [qrCode, setQrCode] = useState<string | null>(null);
   const [downloadOpen, setDownloadOpen] = useState(false);
   // "End" is paginated server-side (it only grows); everything else comes
   // back in one unpaginated list.
   const [ended, setEnded] = useState<PagedTransactions | null>(null);
   const [endedPage, setEndedPage] = useState(1);
+  // Per-status totals for the section headers, loaded up front so they show
+  // while every section is still collapsed. null = not loaded yet.
+  const [counts, setCounts] = useState<Record<string, number> | null>(null);
+
+  async function loadCounts() {
+    try {
+      const body = await apiFetch<{ counts: Record<string, number> }>('/plugins/workflow/transactions/counts');
+      setCounts(body.counts);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.code : 'unknown_error');
+    }
+  }
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadCounts();
+  }, []);
 
   async function loadOpen() {
     try {
@@ -101,9 +120,9 @@ function AdminView() {
     }
   }
 
-  // Refreshes only the sections that have been loaded.
+  // Refreshes the counts and only the sections that have been loaded.
   async function loadTransactions() {
-    await Promise.all([transactions !== null && loadOpen(), ended !== null && loadEnded(endedPage)]);
+    await Promise.all([loadCounts(), transactions !== null && loadOpen(), ended !== null && loadEnded(endedPage)]);
   }
 
   async function handleStatusChange(id: number, status: string) {
@@ -143,7 +162,7 @@ function AdminView() {
         {STATUSES.map((status) => {
           const isEnd = status === 'end';
           const rows = isEnd ? (ended?.transactions ?? null) : (transactions?.filter((t) => t.status === status) ?? null);
-          const count = isEnd ? ended?.total : rows?.length;
+          const count = (isEnd ? ended?.total : rows?.length) ?? (counts ? (counts[status] ?? 0) : undefined);
           return (
             <TransactionsTable
               key={status}
@@ -156,6 +175,7 @@ function AdminView() {
               transactions={rows}
               onStatusChange={handleStatusChange}
               onOpen={setOpenTransaction}
+              onShowQr={setQrCode}
               footer={
                 isEnd && ended ? (
                   <Pager
@@ -172,6 +192,7 @@ function AdminView() {
         })}
       </section>
       {openTransaction && <TransactionDialog transaction={openTransaction} onClose={() => setOpenTransaction(null)} />}
+      {qrCode && <TrackQrDialog code={qrCode} onClose={() => setQrCode(null)} />}
       {downloadOpen && <DownloadReportDialog onClose={() => setDownloadOpen(false)} />}
     </AppShell>
   );
@@ -189,6 +210,7 @@ function TransactionsTable({
   transactions,
   onStatusChange,
   onOpen,
+  onShowQr,
 }: {
   status: string;
   title: string;
@@ -198,6 +220,7 @@ function TransactionsTable({
   transactions: Transaction[] | null;
   onStatusChange: (id: number, status: string) => void;
   onOpen: (transaction: Transaction) => void;
+  onShowQr: (code: string) => void;
 }) {
   return (
     <details className="m3-card m3-card--flush m3-collapsible" onToggle={(e) => e.currentTarget.open && onExpand()}>
@@ -232,7 +255,11 @@ function TransactionsTable({
               {transactions.map((t) => (
                 <tr key={t.id}>
                   <td>{t.control_number ?? '—'}</td>
-                  <td><code>{t.code}</code></td>
+                  <td>
+                    <button type="button" className="txn-code" onClick={() => onShowQr(t.code)} aria-label={`Show QR code for ${t.code}`}>
+                      <code>{t.code}</code>
+                    </button>
+                  </td>
                   <td>{t.customer_name}</td>
                   <td className="m3-table__nowrap">{formatWeight(t.weight_kg)}</td>
                   <td>

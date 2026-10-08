@@ -45,6 +45,53 @@
   color: var(--m3-on-surface-variant);
 }
 
+// Clickable code cell → TrackQrDialog.
+.m3-shell .txn-code {
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+
+  &:hover code {
+    color: var(--m3-primary);
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--m3-primary);
+    outline-offset: 2px;
+  }
+}
+
+.txn-dialog__panel--qr {
+  max-width: 360px;
+}
+
+.txn-qr {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+
+  .qr-code {
+    display: block;
+    border-radius: 8px;
+  }
+
+  .qr-code--loading {
+    background: var(--code-bg);
+  }
+
+  &__url {
+    font-size: 13px;
+    word-break: break-all;
+    text-align: center;
+  }
+}
+
 // Details overlay.
 .txn-dialog {
   position: fixed;
