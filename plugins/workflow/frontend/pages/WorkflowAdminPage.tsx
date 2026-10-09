@@ -21,7 +21,8 @@ import MyTransactionsView from '../components/MyTransactionsView';
 import '../workflow.scss';
 import { formatDateTime } from '../datetime';
 import { formatWeight } from '../weight';
-import { printReceipt } from '../printReceipt';
+import { openReceiptWindow, printReceipt, printsViaRawBT, printViaRawBT, type Receipt } from '../printReceipt';
+import ReceiptPreviewDialog from '../components/ReceiptPreviewDialog';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { downloadReport, type ReportFormat } from '../exportReport';
 import { STATUS_LABELS } from '../status';
@@ -495,6 +496,8 @@ function RegisterTransactionForm({ onCreated }: { onCreated: (code: string) => P
   const [printedCode, setPrintedCode] = useState<string | null>(null);
   const [printed, setPrinted] = useState(false);
   const [printing, setPrinting] = useState(false);
+  // Tablets (RawBT) preview the slip before it goes to the printer.
+  const [previewReceipt, setPreviewReceipt] = useState<Receipt | null>(null);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -506,13 +509,14 @@ function RegisterTransactionForm({ onCreated }: { onCreated: (code: string) => P
     setConfirmingNoPrint(false);
     setError(null);
     if (!formRef.current?.reportValidity() || !user) return;
+    const printWindow = openReceiptWindow();
     setPrinting(true);
     try {
       const code = printedCode ?? (await apiFetch<{ code: string }>('/plugins/workflow/transactions/new-code')).code;
       const control = controlNumber.trim() || nextControlNumber;
       setPrintedCode(code);
       setControlNumber(control);
-      await printReceipt({
+      const receipt: Receipt = {
         ownerName: user.display_name,
         ownerContact: user.contact_number,
         ownerEmail: user.email,
@@ -521,9 +525,15 @@ function RegisterTransactionForm({ onCreated }: { onCreated: (code: string) => P
         weightKg: weight.trim() ? Math.round(Number(weight) * 100) / 100 : null,
         notesHtml: description,
         code,
-      });
+      };
+      if (printsViaRawBT) {
+        setPreviewReceipt(receipt);
+        return;
+      }
+      await printReceipt(receipt, printWindow);
       setPrinted(true);
     } catch (err) {
+      printWindow?.close();
       console.error('Printing failed', err);
       setError('The slip couldn’t be printed.');
     } finally {
@@ -660,6 +670,17 @@ function RegisterTransactionForm({ onCreated }: { onCreated: (code: string) => P
           </button>
         </div>
       </form>
+      {previewReceipt && (
+        <ReceiptPreviewDialog
+          receipt={previewReceipt}
+          onCancel={() => setPreviewReceipt(null)}
+          onPrint={() => {
+            printViaRawBT(previewReceipt);
+            setPreviewReceipt(null);
+            setPrinted(true);
+          }}
+        />
+      )}
       {confirmingNoPrint && (
         <ConfirmDialog
           title="Register without printing?"

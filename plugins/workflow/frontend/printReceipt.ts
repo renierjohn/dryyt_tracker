@@ -1,5 +1,6 @@
-// Prints a claim slip for a registered transaction from a hidden iframe, so
-// the page's own styles and layout don't leak into the printout.
+// Prints a claim slip for a registered transaction in its own tab: tablet
+// browsers ignore print() on an iframe and print the top page, so the slip
+// must be the top-level document of the window being printed.
 export interface Receipt {
   ownerName: string;
   ownerContact: string | null;
@@ -17,7 +18,7 @@ const escapeHtml = (value: string) =>
 
 // Rich-text notes → plain text, one line per paragraph/list item/line break.
 // DOMParser builds an inert document, so nothing in the HTML runs.
-function notesToText(html: string): string {
+export function notesToText(html: string): string {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   doc.querySelectorAll('br').forEach((br) => br.replaceWith('\n'));
   doc.querySelectorAll('li').forEach((li) => li.prepend('• '));
@@ -30,18 +31,67 @@ function notesToText(html: string): string {
     .join('\n');
 }
 
-export async function printReceipt(receipt: Receipt): Promise<void> {
-  const trackUrl = `${window.location.origin}/track?code=${encodeURIComponent(receipt.code)}`;
+// Android/HarmonyOS tablets print to Bluetooth thermal printers (e.g. RPP02N)
+// through the RawBT app, which takes raw ESC/POS bytes via an intent URL.
+export const printsViaRawBT = /Android|HarmonyOS/i.test(navigator.userAgent);
+
+// Plain ASCII only; the printer's code page is unknown.
+const toAscii = (value: string) => value.replace(/[—–]/g, '-').replace(/[^\n -~]/g, '');
+
+export const trackUrlFor = (code: string) => `${window.location.origin}/track?code=${encodeURIComponent(code)}`;
+
+export const ownerLineOf = (receipt: Receipt) => [receipt.ownerContact, receipt.ownerEmail].filter(Boolean).join(' - ');
+
+// Builds a small ESC/POS job (text + the printer's own QR command) and hands
+// it to RawBT. Call from a click: the intent URL needs a user gesture.
+export function printViaRawBT(receipt: Receipt): void {
+  const trackUrl = trackUrlFor(receipt.code);
+  const t = (value: string) => toAscii(value.replace(/•/g, '*'));
+  const notes = notesToText(receipt.notesHtml);
+  const ownerLine = ownerLineOf(receipt);
+  const qrLength = trackUrl.length + 3;
+  const ESC = '\x1b';
+  const GS = '\x1d';
+  const job =
+    `${ESC}@${ESC}a\x01${ESC}!\x30${t(receipt.ownerName)}\n${ESC}!\x00${t(ownerLine)}\n\n` +
+    `${ESC}a\x00Name: ${t(receipt.customerName)}\n` +
+    `Control Number: ${t(receipt.controlNumber ?? '-')}\n` +
+    `Weight: ${receipt.weightKg === null ? '-' : `${receipt.weightKg} kg`}\n` +
+    `Notes: ${t(notes || '-')}\n\n` +
+    `${ESC}a\x01` +
+    `${GS}(k\x04\x001A2\x00` + // QR model 2
+    `${GS}(k\x03\x001C\x06` + // module size 6
+    `${GS}(k\x03\x001E1` + // error correction M
+    `${GS}(k${String.fromCharCode(qrLength & 0xff, qrLength >> 8)}1P0${trackUrl}` +
+    `${GS}(k\x03\x001Q0\n` + // print the QR
+    `${receipt.code}\n${ESC}d\x04`;
+  window.location.href = `intent:base64,${btoa(job)}#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;`;
+}
+
+// Must be called synchronously in the click handler, before any await, or the
+// browser blocks the popup.
+export function openReceiptWindow(): Window | null {
+  if (printsViaRawBT) return null;
+  const win = window.open('', '_blank');
+  win?.document.write('<!doctype html><title>Preparing slip…</title><p style="font:14px system-ui;padding:16px">Preparing slip…</p>');
+  return win;
+}
+
+export async function printReceipt(receipt: Receipt, win: Window | null): Promise<void> {
+  const trackUrl = trackUrlFor(receipt.code);
+  if (!win || win.closed) throw new Error('Print window was blocked or closed');
   const { toDataURL } = await import('qrcode');
   const qr = await toDataURL(trackUrl, { width: 320, margin: 1, errorCorrectionLevel: 'M' });
   const notes = notesToText(receipt.notesHtml);
-  const ownerLine = [receipt.ownerContact, receipt.ownerEmail].filter(Boolean).join(' - ');
+  const ownerLine = ownerLineOf(receipt);
 
+  // The slip prints itself once the QR image has loaded, and closes after.
   const html = `<!doctype html>
-<html><head><meta charset="utf-8"><title>${escapeHtml(receipt.code)}</title>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(receipt.code)}</title>
 <style>
   @page { margin: 12mm; }
-  body { margin: 0; padding: 0 8mm; font: 14px/1.5 system-ui, sans-serif; color: #000; }
+  body { margin: 0; padding: 0 8mm; font: 14px/1.5 system-ui, sans-serif; color: #000; background: #fff; }
   .center { text-align: center; }
   h1 { margin: 0; font-size: 20px; }
   .owner { margin: 0 0 16px; }
@@ -62,18 +112,13 @@ export async function printReceipt(receipt: Receipt): Promise<void> {
     <img src="${qr}" alt="">
     <p class="code">${escapeHtml(receipt.code)}</p>
   </div>
+  <script>
+    window.addEventListener('afterprint', () => window.close());
+    window.addEventListener('load', () => setTimeout(() => window.print(), 250));
+  </script>
 </body></html>`;
 
-  const frame = document.createElement('iframe');
-  frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
-  document.body.appendChild(frame);
-  const doc = frame.contentDocument!;
-  doc.open();
-  doc.write(html);
-  doc.close();
-  const img = doc.querySelector('img')!;
-  if (!img.complete) await new Promise((resolve) => img.addEventListener('load', resolve, { once: true }));
-  frame.contentWindow!.addEventListener('afterprint', () => frame.remove(), { once: true });
-  frame.contentWindow!.focus();
-  frame.contentWindow!.print();
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
 }

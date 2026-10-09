@@ -92,6 +92,50 @@
   }
 }
 
+// Thermal slip preview, roughly 58mm paper.
+.receipt-preview {
+  width: 100%;
+  max-width: 300px;
+  margin: 0 auto;
+  padding: 16px 12px;
+  background: #fff;
+  color: #000;
+  font: 13px/1.4 ui-monospace, monospace;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 25%);
+
+  p {
+    margin: 0;
+  }
+
+  &__owner {
+    font-size: 20px;
+    font-weight: 700;
+    text-align: center;
+  }
+
+  &__center {
+    margin-bottom: 12px !important;
+    text-align: center;
+    word-break: break-word;
+  }
+
+  &__notes {
+    white-space: pre-line;
+  }
+
+  &__qr {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 12px;
+  }
+
+  &__code {
+    font-weight: 700;
+    letter-spacing: 2px;
+  }
+}
+
 // Details overlay.
 .txn-dialog {
   position: fixed;
