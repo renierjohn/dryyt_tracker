@@ -43,7 +43,7 @@ function sheetXml(header: string[], rows: Cell[][]): string {
   return (
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-    `<cols>${header.map((_, i) => `<col min="${i + 1}" max="${i + 1}" width="${i === 2 || i === 4 ? 28 : 18}" customWidth="1"/>`).join('')}</cols>` +
+    `<cols>${header.map((_, i) => `<col min="${i + 1}" max="${i + 1}" width="${i === header.length - 1 ? 48 : i === 2 || i === 4 ? 28 : 18}" customWidth="1"/>`).join('')}</cols>` +
     `<sheetData>${[header, ...rows].map((cells, i) => rowXml(cells, i + 1)).join('')}</sheetData>` +
     '</worksheet>'
   );

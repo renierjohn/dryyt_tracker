@@ -21,7 +21,7 @@ import MyTransactionsView from '../components/MyTransactionsView';
 import '../workflow.scss';
 import { formatDateTime } from '../datetime';
 import { formatWeight } from '../weight';
-import { openReceiptWindow, printReceipt, printsViaRawBT, printViaRawBT, type Receipt } from '../printReceipt';
+import { notesToText, openReceiptWindow, printReceipt, printsViaRawBT, printViaRawBT, type Receipt } from '../printReceipt';
 import ReceiptPreviewDialog from '../components/ReceiptPreviewDialog';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { downloadReport, type ReportFormat } from '../exportReport';
@@ -307,9 +307,10 @@ interface ExportRow {
   status: string;
   created_at: string;
   done_at: string | null;
+  description: string | null;
 }
 
-const REPORT_HEADER = ['Control Number', 'Code', 'Name', 'Phone', 'Email', 'Weight (kg)', 'Status', 'Date Started', 'Date Ended'];
+const REPORT_HEADER = ['Control Number', 'Code', 'Name', 'Phone', 'Email', 'Weight (kg)', 'Status', 'Date Started', 'Date Ended', 'Notes'];
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const localDay = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -342,6 +343,7 @@ function DownloadReportDialog({ onClose }: { onClose: () => void }) {
         STATUS_LABELS[t.status] ?? t.status,
         reportDate(t.created_at),
         reportDate(t.done_at),
+        t.description ? notesToText(t.description) : null,
       ]);
       downloadReport(format, `transactions-${localDay(new Date())}`, REPORT_HEADER, rows);
       onClose();

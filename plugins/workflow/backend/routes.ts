@@ -307,12 +307,13 @@ workflowRoutes.post('/transactions', requirePermission('manage_users'), async (c
 
 // Every transaction of the signed-in owner, oldest first, for the Tracker's
 // "Download report" (the file itself is built client-side). email is the
-// linked customer account's, when there is one.
+// linked customer account's, when there is one; description goes in as plain
+// text, so it isn't sanitized here.
 workflowRoutes.get('/transactions/export', requirePermission('manage_users'), async (c) => {
   const { results } = await c.env.DB
     .prepare(
       `SELECT t.control_number, t.code, t.customer_name, t.customer_contact, u.email AS customer_email,
-              t.weight_kg, t.status, t.created_at, t.done_at
+              t.weight_kg, t.status, t.created_at, t.done_at, t.description
        FROM workflow_transactions t
        LEFT JOIN users u ON u.id = t.customer_user_id
        WHERE t.created_by = ? ORDER BY t.created_at ASC, t.id ASC`,
